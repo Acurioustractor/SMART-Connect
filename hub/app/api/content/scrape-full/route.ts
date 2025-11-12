@@ -718,11 +718,9 @@ function determineTargetAudience(content: any): string[] {
   return audience
 }
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb'
-    }
-  },
-  maxDuration: 300 // 5 minutes
-}
+// Route segment config for Next.js App Router
+export const maxDuration = 300 // 5 minutes timeout
+export const dynamic = 'force-dynamic' // Disable static optimization
+// Note: Body size limits in App Router are configured via next.config.js or middleware
+// The default limit is 1MB, but this can be increased in next.config.js with:
+// experimental: { serverActions: { bodySizeLimit: '10mb' } }
