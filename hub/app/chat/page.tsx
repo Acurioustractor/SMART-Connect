@@ -116,7 +116,7 @@ export default function ChatPage() {
                       key={index}
                       variant="outline"
                       onClick={() => setInput(question.text)}
-                      className="justify-start text-left h-auto py-4 px-5"
+                      className="justify-start text-left h-auto py-4 px-5 text-gray-900"
                     >
                       <span className="mr-3 text-[#00A5E0]">{question.icon}</span>
                       <span className="flex-1">{question.text}</span>
@@ -142,7 +142,7 @@ export default function ChatPage() {
                   className={`px-5 py-3 rounded-2xl max-w-[80%] ${
                     msg.role === 'user'
                       ? 'bg-[#003B5C] text-white'
-                      : 'bg-white border border-gray-200'
+                      : 'bg-white border border-gray-200 text-gray-900'
                   }`}
                 >
                   <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
