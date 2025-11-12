@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MessageCircle, Wrench, CheckCircle2, Sparkles, Users, Shield } from 'lucide-react'
+import { MessageCircle, Wrench, CheckCircle2, Sparkles, Users, Shield, Globe, FileText } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Container } from '@/components/ui/container'
 import { Button } from '@/components/ui/button'
@@ -42,7 +42,7 @@ export default function Home() {
       {/* Feature Cards */}
       <section className="py-12">
         <Container size="lg">
-          <div className="grid md:grid-cols-2 gap-6 lg:gap-8 mb-16">
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-16">
             <Link href="/chat" className="block group">
               <Card className="h-full hover:shadow-xl transition-all duration-300 group-hover:border-[#00A5E0]">
                 <CardHeader>
@@ -107,6 +107,41 @@ export default function Home() {
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
                       <span>Cultural safety checker</span>
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link href="/smart-site-tools" className="block group">
+              <Card className="h-full hover:shadow-xl transition-all duration-300 group-hover:border-[#06D6A0] bg-gradient-to-br from-green-50 to-emerald-50">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 bg-[#06D6A0]/20 rounded-lg mb-4">
+                      <Globe className="h-8 w-8 text-[#06D6A0]" aria-hidden="true" />
+                    </div>
+                    <span className="text-xs font-medium text-[#06D6A0] bg-white px-3 py-1 rounded-full border border-[#06D6A0]">
+                      New!
+                    </span>
+                  </div>
+                  <CardTitle>SMART Site & Tools</CardTitle>
+                  <CardDescription>
+                    Scrape and analyze all content from smartrecoveryaustralia.com.au
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
+                      <span>Extract all PDFs & documents</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Globe className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
+                      <span>Full site content scraping</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
+                      <span>AI-powered content analysis</span>
                     </li>
                   </ul>
                 </CardContent>

@@ -4,10 +4,10 @@ import path from 'path'
 
 export async function GET(
   request: Request,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
-    const filename = params.filename
+    const { filename } = await params
     const interviewsPath = path.join(process.cwd(), '../knowledge-base/interviews')
     const filePath = path.join(interviewsPath, filename)
 

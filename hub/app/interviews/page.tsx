@@ -61,15 +61,65 @@ export default function InterviewsPage() {
     // Extract key sections from the interview
     const sections = {
       summary: '',
+      keyThemes: [] as string[],
       keyQuotes: [] as string[],
       keySentiments: [] as string[],
+      platformPriorities: [] as string[],
+      designPrinciples: [] as string[],
+      nextSteps: [] as string[],
+      mostImportantQuote: '',
       transcript: ''
     }
 
-    // Extract summary
-    const summaryMatch = content.match(/\*\*.*?Summary.*?\*\*\s*\n+([\s\S]*?)(?=\n\*\*|$)/i)
+    // Extract main summary section (handles both **Summary** and just Summary)
+    let summaryMatch = content.match(/\*\*.*?Summary.*?\*\*\s*\n+([\s\S]*?)(?=\n#{1,3}\s|$)/i)
+    if (!summaryMatch) {
+      summaryMatch = content.match(/^Summary\s*\n+([\s\S]*?)(?=\n#{1,3}\s|$)/im)
+    }
     if (summaryMatch) {
       sections.summary = summaryMatch[1].trim()
+    }
+
+    // Extract key themes from summary
+    const keyThemesMatch = content.match(/\*\*Key Themes:\*\*\s*([\s\S]*?)(?=\n\*\*[A-Z])/i)
+    if (keyThemesMatch) {
+      const themes = keyThemesMatch[1].match(/\*\*([^*]+)\*\*:/g)
+      if (themes) {
+        sections.keyThemes = themes.map(t => t.replace(/\*\*/g, '').replace(/:$/, '').trim())
+      }
+    }
+
+    // Extract platform feature priorities
+    const prioritiesMatch = content.match(/\*\*Platform Feature Priorities:\*\*\s*([\s\S]*?)(?=\n\*\*[A-Z])/i)
+    if (prioritiesMatch) {
+      const priorities = prioritiesMatch[1].match(/^\s*-\s+\*\*([^*]+)\*\*:/gm)
+      if (priorities) {
+        sections.platformPriorities = priorities.map(p => p.replace(/^\s*-\s+\*\*/, '').replace(/\*\*:/, '').trim())
+      }
+    }
+
+    // Extract design principles
+    const principlesMatch = content.match(/\*\*Key Platform Design Principles[^*]*\*\*\s*([\s\S]*?)(?=\n#{2,3}\s|$)/i)
+    if (principlesMatch) {
+      const principles = principlesMatch[1].match(/^\d+\.\s+\*\*([^*]+)\*\*/gm)
+      if (principles) {
+        sections.designPrinciples = principles.map(p => p.replace(/^\d+\.\s+\*\*/, '').replace(/\*\*/, '').trim())
+      }
+    }
+
+    // Extract most important quote
+    const importantQuoteMatch = content.match(/\*\*Most Important Quote:\*\*\s*\n+\*([^*]+)\*/i)
+    if (importantQuoteMatch) {
+      sections.mostImportantQuote = importantQuoteMatch[1].trim()
+    }
+
+    // Extract next steps
+    const nextStepsMatch = content.match(/\*\*Next Steps\*\*\s*([\s\S]*?)(?=\n#{2,3}\s|\n\*\*Most|$)/i)
+    if (nextStepsMatch) {
+      const steps = nextStepsMatch[1].match(/^-\s+(.+)$/gm)
+      if (steps) {
+        sections.nextSteps = steps.map(s => s.replace(/^-\s+/, '').trim())
+      }
     }
 
     // Extract key quotes
@@ -84,12 +134,6 @@ export default function InterviewsPage() {
     if (sentimentsMatch) {
       const sentiments = sentimentsMatch[1].match(/^\d+\.\s+.+$/gm) || []
       sections.keySentiments = sentiments.map(s => s.replace(/^\d+\.\s+/, '').trim())
-    }
-
-    // If there's a transcript section, get a preview
-    const transcriptMatch = content.match(/\*\*.*?Transcript.*?\*\*\s*([\s\S]{200,1000})/i)
-    if (transcriptMatch) {
-      sections.transcript = transcriptMatch[1].trim().substring(0, 800) + '...'
     }
 
     return sections
@@ -272,17 +316,104 @@ export default function InterviewsPage() {
 
                       return (
                         <div className="py-6 space-y-6">
+                          {/* Most Important Quote - Featured at top */}
+                          {sections.mostImportantQuote && (
+                            <div className="bg-gradient-to-br from-[#003B5C] to-[#00527A] p-6 rounded-lg border-2 border-[#00A5E0]">
+                              <div className="flex items-start gap-3">
+                                <span className="text-3xl">💬</span>
+                                <div>
+                                  <h3 className="text-sm font-semibold text-[#00A5E0] mb-2">Most Important Quote</h3>
+                                  <p className="text-base text-white leading-relaxed italic">&ldquo;{sections.mostImportantQuote}&rdquo;</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Summary */}
                           {sections.summary && (
-                            <div className="bg-white p-6 rounded-lg border border-gray-200">
-                              <h3 className="text-base font-semibold text-gray-900 mb-3">Interview Summary</h3>
-                              <p className="text-sm text-gray-800 leading-relaxed">{sections.summary}</p>
+                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-2xl">📋</span>
+                                Executive Summary
+                              </h3>
+                              <div className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">{sections.summary}</div>
+                            </div>
+                          )}
+
+                          {/* Key Themes */}
+                          {sections.keyThemes.length > 0 && (
+                            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-lg border border-blue-200">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-2xl">🎯</span>
+                                Key Themes
+                              </h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {sections.keyThemes.map((theme, idx) => (
+                                  <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border border-blue-200">
+                                    <p className="text-sm font-semibold text-[#003B5C]">{theme}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Platform Priorities */}
+                          {sections.platformPriorities.length > 0 && (
+                            <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border border-green-200">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-2xl">⭐</span>
+                                Platform Feature Priorities
+                              </h3>
+                              <ul className="space-y-2">
+                                {sections.platformPriorities.map((priority, idx) => (
+                                  <li key={idx} className="flex items-start gap-3 bg-white p-3 rounded-lg shadow-sm">
+                                    <span className="text-green-600 font-bold mt-0.5">{idx + 1}.</span>
+                                    <span className="text-sm text-gray-800 font-medium">{priority}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Design Principles */}
+                          {sections.designPrinciples.length > 0 && (
+                            <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-200">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-2xl">🏗️</span>
+                                Platform Design Principles
+                              </h3>
+                              <ul className="space-y-2">
+                                {sections.designPrinciples.map((principle, idx) => (
+                                  <li key={idx} className="flex items-start gap-3 bg-white p-3 rounded-lg shadow-sm">
+                                    <span className="text-purple-600 font-bold">{idx + 1}.</span>
+                                    <span className="text-sm text-gray-800">{principle}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Next Steps */}
+                          {sections.nextSteps.length > 0 && (
+                            <div className="bg-gradient-to-br from-amber-50 to-orange-50 p-6 rounded-lg border border-amber-200">
+                              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-2xl">🚀</span>
+                                Recommended Next Steps
+                              </h3>
+                              <ul className="space-y-2">
+                                {sections.nextSteps.map((step, idx) => (
+                                  <li key={idx} className="flex items-start gap-3 bg-white p-3 rounded-lg shadow-sm">
+                                    <span className="text-amber-600">✓</span>
+                                    <span className="text-sm text-gray-800">{step}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           )}
 
                           {/* Key Quotes */}
                           {sections.keyQuotes.length > 0 && (
-                            <div className="bg-white p-6 rounded-lg border border-gray-200">
+                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
                               <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                                 <span className="text-[#003B5C]">💬</span>
                                 Key Insights on Community & Connection
@@ -299,8 +430,8 @@ export default function InterviewsPage() {
 
                           {/* Key Sentiments */}
                           {sections.keySentiments.length > 0 && (
-                            <div className="bg-white p-6 rounded-lg border border-gray-200">
-                              <h3 className="text-base font-semibold text-gray-900 mb-4">Key Themes</h3>
+                            <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                              <h3 className="text-base font-semibold text-gray-900 mb-4">Key Sentiments</h3>
                               <ul className="space-y-2">
                                 {sections.keySentiments.map((sentiment, idx) => (
                                   <li key={idx} className="flex items-start gap-2 text-sm text-gray-800">
@@ -309,14 +440,6 @@ export default function InterviewsPage() {
                                   </li>
                                 ))}
                               </ul>
-                            </div>
-                          )}
-
-                          {/* Transcript Preview */}
-                          {sections.transcript && (
-                            <div className="bg-white p-6 rounded-lg border border-gray-200">
-                              <h3 className="text-base font-semibold text-gray-900 mb-3">Interview Excerpt</h3>
-                              <p className="text-sm text-gray-700 leading-relaxed italic">{sections.transcript}</p>
                             </div>
                           )}
                         </div>

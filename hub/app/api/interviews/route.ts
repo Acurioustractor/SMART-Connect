@@ -48,17 +48,29 @@ export async function GET() {
       let summary = ''
       const keyThemes: string[] = []
 
-      // 1. Try to find the descriptive summary paragraph (after **Summary**)
-      const summaryBlockMatch = content.match(/\*\*.*?Summary.*?\*\*\s*\n+([\s\S]*?)(?=\n\*\*|$)/i)
+      // 1. Try to find the descriptive summary paragraph (after **Summary** or just Summary)
+      let summaryBlockMatch = content.match(/\*\*.*?Summary.*?\*\*\s*\n+([\s\S]*?)(?=\n#{1,3}\s|\n\*\*|$)/i)
+
+      // If not found, try without asterisks
+      if (!summaryBlockMatch) {
+        summaryBlockMatch = content.match(/^Summary\s*\n+([\s\S]*?)(?=\n#{1,3}\s|\n\*\*|$)/im)
+      }
+
       if (summaryBlockMatch) {
         summary = summaryBlockMatch[1].trim()
+        // Extract just the key themes or first meaningful paragraph
+        const keyThemesMatch = summary.match(/\*\*Key Themes:\*\*\s*([\s\S]*?)(?=\n\*\*|$)/i)
+        if (keyThemesMatch) {
+          summary = keyThemesMatch[1].trim()
+        }
         // Clean and format
         summary = summary.replace(/\[[\s\S]*?\]\([\s\S]*?\)/g, '')
         summary = summary.replace(/!\[[\s\S]*?\]/g, '')
         summary = summary.replace(/#{1,6}\s/g, '')
+        summary = summary.replace(/\*\*/g, '')
         summary = summary.split('\n').filter(line => line.trim()).join(' ')
-        if (summary.length > 350) {
-          summary = summary.substring(0, 350) + '...'
+        if (summary.length > 450) {
+          summary = summary.substring(0, 450) + '...'
         }
       }
 
