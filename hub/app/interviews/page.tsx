@@ -170,6 +170,11 @@ export default function InterviewsPage() {
                           </span>
                         </div>
                       )}
+                      {interview.summary && (
+                        <div className="mt-3 text-sm text-gray-700 leading-relaxed">
+                          <p className="line-clamp-3">{interview.summary}</p>
+                        </div>
+                      )}
                     </div>
                     <Button variant="ghost" size="sm" className="flex-shrink-0">
                       {expandedId === interview.id ? (

@@ -43,9 +43,37 @@ export async function GET() {
       const affiliationMatch = content.match(/SRAU Affiliation:\s*(.+)$/m)
       const statusMatch = content.match(/Status:\s*(.+)$/m)
 
-      // Extract summary (first paragraph after "Summary" heading)
-      const summaryMatch = content.match(/Summary\s*\n+([\s\S]*?)(?=\n#|$)/)
-      const summary = summaryMatch ? summaryMatch[1].trim().substring(0, 300) + '...' : ''
+      // Extract summary - try multiple patterns
+      let summary = ''
+
+      // Try to find "Summary of interview" or just "Summary" heading
+      const summaryHeadingMatch = content.match(/#+\s*Summary[^\n]*\n+([\s\S]*?)(?=\n#+|$)/)
+      if (summaryHeadingMatch) {
+        summary = summaryHeadingMatch[1].trim().substring(0, 400)
+      } else {
+        // Try to find key quotes or sentiments section
+        const keyQuotesMatch = content.match(/\*\*Key (Quotes|Sentiments):\*\*\s*([\s\S]*?)(?=\n\*\*|$)/)
+        if (keyQuotesMatch) {
+          summary = keyQuotesMatch[2].trim().substring(0, 400)
+        } else {
+          // Fall back to content after the metadata section
+          const contentAfterMeta = content.split('---').slice(2).join('---').trim()
+          if (contentAfterMeta && contentAfterMeta.length > 50) {
+            summary = contentAfterMeta.substring(0, 400)
+          }
+        }
+      }
+
+      // Clean up summary
+      if (summary) {
+        summary = summary.replace(/\[[\s\S]*?\]\([\s\S]*?\)/g, '') // Remove markdown links
+        summary = summary.replace(/!\[[\s\S]*?\]/g, '') // Remove images
+        summary = summary.replace(/#{1,6}\s/g, '') // Remove heading markers
+        summary = summary.trim()
+        if (summary.length > 300) {
+          summary = summary.substring(0, 300) + '...'
+        }
+      }
 
       return {
         id: `interview-${index}`,
