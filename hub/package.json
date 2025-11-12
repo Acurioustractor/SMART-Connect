@@ -6,7 +6,10 @@
     "dev": "next dev -p 3080",
     "build": "next build",
     "start": "next start -p 3080",
-    "lint": "next lint"
+    "lint": "next lint",
+    "apply-content-schema": "tsx scripts/apply-content-schema.ts",
+    "scrape-smart-site": "tsx scripts/scrape-smart-site.ts",
+    "migrate-to-supabase": "tsx scripts/migrate-to-supabase.ts"
   },
   "dependencies": {
     "@mendable/firecrawl-js": "^4.5.0",
@@ -38,5 +41,8 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6"
   }
 }
