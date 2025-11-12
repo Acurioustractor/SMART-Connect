@@ -11,8 +11,8 @@ export default function ToolsPage() {
       description: 'Generate evidence-based posts, emails, and resources grounded in research',
       icon: <FileText className="h-10 w-10" />,
       color: 'bg-[#003B5C]/10 text-[#003B5C]',
-      status: 'Coming Soon',
-      statusColor: 'bg-[#FFD23F]/10 text-[#FFD23F]',
+      status: 'Active',
+      statusColor: 'bg-green-100 text-green-700',
       href: '/tools/content-generator'
     },
     {
@@ -94,10 +94,19 @@ export default function ToolsPage() {
                 </CardDescription>
               </CardHeader>
               <CardFooter>
-                <Button variant="ghost" className="w-full group-hover:bg-gray-100" disabled>
-                  Learn More
-                  <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
-                </Button>
+                {tool.status === 'Active' ? (
+                  <Link href={tool.href} className="w-full">
+                    <Button variant="ghost" className="w-full group-hover:bg-gray-100">
+                      Open Tool
+                      <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button variant="ghost" className="w-full group-hover:bg-gray-100" disabled>
+                    Learn More
+                    <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" aria-hidden="true" />
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           ))}

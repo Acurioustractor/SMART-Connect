@@ -119,11 +119,21 @@ export default function InterviewsPage() {
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
       <Container size="xl" className="py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-3">Facilitator Interviews</h1>
-          <p className="text-xl text-gray-600">
-            Browse through {interviews.length} interviews with SMART Recovery facilitators
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-3">Facilitator Interviews</h1>
+            <p className="text-xl text-gray-600">
+              Browse through {interviews.length} interviews with SMART Recovery facilitators
+            </p>
+          </div>
+          <Button
+            onClick={() => window.location.href = '/interviews/upload'}
+            className="flex items-center gap-2"
+            size="lg"
+          >
+            <FileText className="h-5 w-5" />
+            Add Interview
+          </Button>
         </div>
 
         {/* Search Bar */}
