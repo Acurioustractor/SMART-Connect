@@ -421,50 +421,116 @@ async function generateAndStoreEmbeddings(
   title: string,
   contentType: string
 ): Promise<number> {
-  // Chunk content into smaller pieces (1000 words each)
-  const chunks = chunkContent(content, 1000)
+  // Chunk content into smaller pieces (500 words each to stay under 8192 token limit)
+  // Conservative estimate: 500 words ≈ 666 tokens (well under 8192 limit)
+  const chunks = chunkContent(content, 500)
   let embeddingCount = 0
 
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i]
 
     try {
-      // Generate embedding
-      const response = await openai.embeddings.create({
-        model: 'text-embedding-ada-002',
-        input: chunk
-      })
+      // Estimate token count (rough estimate: 1 word ≈ 1.33 tokens)
+      const estimatedTokens = estimateTokenCount(chunk)
 
-      const embedding = response.data[0].embedding
+      // Skip if chunk is too large (safety check)
+      if (estimatedTokens > 8000) {
+        console.warn(`Chunk ${i} estimated at ${estimatedTokens} tokens, splitting further...`)
 
-      // Store embedding
-      const { error } = await supabase
-        .from('content_embeddings')
-        .insert({
-          scraped_content_id: scrapedContentId,
-          chunk_index: i,
-          chunk_text: chunk,
-          chunk_size: chunk.split(/\s+/).length,
-          embedding,
-          section_title: i === 0 ? title : `${title} (Part ${i + 1})`,
-          content_type: contentType
-        })
-
-      if (error) {
-        console.error('Failed to store embedding:', error)
-      } else {
-        embeddingCount++
+        // Recursively split this chunk
+        const subChunks = chunkContent(chunk, 250)
+        for (const subChunk of subChunks) {
+          try {
+            await createEmbedding(supabase, openai, scrapedContentId, subChunk, i, title, contentType)
+            embeddingCount++
+          } catch (subError: any) {
+            console.error(`Failed to generate sub-chunk embedding:`, subError.message)
+          }
+        }
+        continue
       }
+
+      // Generate embedding
+      await createEmbedding(supabase, openai, scrapedContentId, chunk, i, title, contentType)
+      embeddingCount++
 
       // Rate limiting: wait 50ms between requests
       await new Promise(resolve => setTimeout(resolve, 50))
 
     } catch (error: any) {
-      console.error('Failed to generate embedding:', error)
+      // Handle token limit errors specifically
+      if (error.message?.includes('maximum context length')) {
+        console.warn(`Chunk ${i} exceeded token limit, splitting into smaller chunks...`)
+
+        // Try splitting this chunk in half
+        const words = chunk.split(/\s+/)
+        const midpoint = Math.floor(words.length / 2)
+        const subChunks = [
+          words.slice(0, midpoint).join(' '),
+          words.slice(midpoint).join(' ')
+        ]
+
+        for (const subChunk of subChunks) {
+          try {
+            await createEmbedding(supabase, openai, scrapedContentId, subChunk, i, title, contentType)
+            embeddingCount++
+          } catch (subError: any) {
+            console.error(`Failed to generate sub-chunk embedding after split:`, subError.message)
+          }
+        }
+      } else {
+        console.error(`Failed to generate embedding for chunk ${i}:`, error.message)
+      }
     }
   }
 
   return embeddingCount
+}
+
+/**
+ * Helper function to create a single embedding
+ */
+async function createEmbedding(
+  supabase: any,
+  openai: OpenAI,
+  scrapedContentId: string,
+  chunkText: string,
+  chunkIndex: number,
+  title: string,
+  contentType: string
+) {
+  const response = await openai.embeddings.create({
+    model: 'text-embedding-ada-002',
+    input: chunkText
+  })
+
+  const embedding = response.data[0].embedding
+
+  // Store embedding
+  const { error } = await supabase
+    .from('content_embeddings')
+    .insert({
+      scraped_content_id: scrapedContentId,
+      chunk_index: chunkIndex,
+      chunk_text: chunkText,
+      chunk_size: chunkText.split(/\s+/).length,
+      embedding,
+      section_title: chunkIndex === 0 ? title : `${title} (Part ${chunkIndex + 1})`,
+      content_type: contentType
+    })
+
+  if (error) {
+    console.error('Failed to store embedding:', error)
+    throw error
+  }
+}
+
+/**
+ * Estimate token count (rough estimate: 1 word ≈ 1.33 tokens for English text)
+ */
+function estimateTokenCount(text: string): number {
+  const wordCount = text.split(/\s+/).length
+  return Math.ceil(wordCount * 1.33)
 }
 
 /**
