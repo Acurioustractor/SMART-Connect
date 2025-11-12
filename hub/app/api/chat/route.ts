@@ -2,6 +2,7 @@ import { OpenAI } from 'openai'
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -35,7 +36,7 @@ Always cite specific interviews or data points when possible.`
 
 export async function POST(req: Request) {
   try {
-    const { messages } = await req.json()
+    const { messages, conversationId } = await req.json()
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
@@ -44,6 +45,10 @@ export async function POST(req: Request) {
       )
     }
 
+    // Get the last user message
+    const lastUserMessage = messages[messages.length - 1]
+
+    // Call OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-4-turbo-preview',
       messages: [
@@ -54,11 +59,85 @@ export async function POST(req: Request) {
       max_tokens: 1500,
     })
 
+    const assistantMessage = completion.choices[0].message.content
+
+    // Save to Supabase if configured
+    if (isSupabaseConfigured()) {
+      try {
+        let currentConversationId = conversationId
+
+        // Create conversation if it doesn't exist
+        if (!currentConversationId) {
+          const { data: conversation, error: convError } = await supabase
+            .from('conversations')
+            .insert({
+              title: lastUserMessage.content.substring(0, 100), // First 100 chars as title
+            })
+            .select()
+            .single()
+
+          if (convError) {
+            console.error('Error creating conversation:', convError)
+          } else {
+            currentConversationId = conversation.id
+          }
+        }
+
+        // Save both messages if we have a conversation ID
+        if (currentConversationId) {
+          const messagesToSave = [
+            {
+              conversation_id: currentConversationId,
+              role: 'user',
+              content: lastUserMessage.content,
+              tokens_used: completion.usage?.prompt_tokens || 0,
+            },
+            {
+              conversation_id: currentConversationId,
+              role: 'assistant',
+              content: assistantMessage,
+              tokens_used: completion.usage?.completion_tokens || 0,
+            },
+          ]
+
+          const { error: msgError } = await supabase
+            .from('messages')
+            .insert(messagesToSave)
+
+          if (msgError) {
+            console.error('Error saving messages:', msgError)
+          }
+
+          // Track analytics event
+          const { error: analyticsError } = await supabase
+            .from('analytics_events')
+            .insert({
+              event_type: 'chat_message',
+              event_name: 'ai_chat_interaction',
+              page_url: '/chat',
+              metadata: {
+                message_length: lastUserMessage.content.length,
+                response_length: assistantMessage?.length || 0,
+                tokens_used: completion.usage?.total_tokens || 0,
+              },
+            })
+
+          if (analyticsError) {
+            console.error('Error tracking analytics:', analyticsError)
+          }
+        }
+      } catch (supabaseError) {
+        // Log but don't fail the request if Supabase has issues
+        console.error('Supabase error (non-fatal):', supabaseError)
+      }
+    }
+
     return NextResponse.json({
       message: {
         role: 'assistant',
-        content: completion.choices[0].message.content,
+        content: assistantMessage,
       },
+      conversationId: conversationId || null,
     })
   } catch (error: any) {
     console.error('Chat API error:', error)
