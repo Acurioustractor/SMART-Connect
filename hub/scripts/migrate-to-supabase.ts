@@ -102,13 +102,27 @@ async function extractMetadataFromContent(content: string): Promise<InterviewMet
   const roleMatch = content.match(/Notes\s*:\s*(.+)$/m)
   const statusMatch = content.match(/Status:\s*(.+)$/m)
 
+  // Normalize status to allowed values: 'scheduled', 'in_progress', 'completed'
+  let normalizedStatus = 'completed'
+  if (statusMatch) {
+    const rawStatus = statusMatch[1].trim().toLowerCase()
+    if (rawStatus.includes('schedule') || rawStatus.includes('upcoming')) {
+      normalizedStatus = 'scheduled'
+    } else if (rawStatus.includes('progress') || rawStatus.includes('ongoing')) {
+      normalizedStatus = 'in_progress'
+    } else {
+      // Default to 'completed' for any other status (locked, done, finished, etc.)
+      normalizedStatus = 'completed'
+    }
+  }
+
   return {
     name: nameMatch ? nameMatch[1].trim() : 'Unknown',
     email: emailMatch ? emailMatch[1].trim() : undefined,
     interviewDate: dateMatch ? dateMatch[1].trim() : undefined,
     affiliation: affiliationMatch ? affiliationMatch[1].trim() : undefined,
     role: roleMatch ? roleMatch[1].trim() : undefined,
-    status: statusMatch ? statusMatch[1].trim() : 'completed'
+    status: normalizedStatus
   }
 }
 
