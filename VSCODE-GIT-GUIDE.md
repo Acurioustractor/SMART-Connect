@@ -1,5 +1,19 @@
 # VS Code Git Guide - Quick Reference
 
+## ✅ Git Configuration (Already Set Up!)
+
+Your Git is now configured to avoid those annoying push/pull errors:
+
+```bash
+# Automatically set - you're good to go!
+pull.rebase = false       # Merge strategy for divergent branches
+push.default = current    # Push to current branch by default
+```
+
+**New Git Aliases Available:**
+- `git sync` - Pull and push in one command
+- `git pushup` - Push current branch and set upstream
+
 ## 🚀 Pushing to GitHub from VS Code
 
 ### Method 1: Using VS Code UI (Easiest!)
@@ -32,7 +46,25 @@ File → Open Folder → Select "SMART Connect Interviews"
 
 ---
 
-### Method 2: Using VS Code Terminal
+### Method 2: Super Simple (NEW! Using Git Aliases)
+
+#### The Easiest Way - One Command:
+
+```bash
+git add . && git commit -m "Your message" && git sync
+```
+
+Or if it's your first push on a new branch:
+
+```bash
+git add . && git commit -m "Your message" && git pushup
+```
+
+That's it! No more complicated steps.
+
+---
+
+### Method 3: Using VS Code Terminal (Traditional)
 
 #### Step 1: Open Terminal
 Press **Cmd+`** (backtick key, below Escape)
