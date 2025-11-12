@@ -17,6 +17,7 @@ interface Interview {
   affiliation?: string
   status?: string
   summary?: string
+  keyThemes?: string[]
   filename: string
 }
 
@@ -54,6 +55,44 @@ export default function InterviewsPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const parseInterviewContent = (content: string) => {
+    // Extract key sections from the interview
+    const sections = {
+      summary: '',
+      keyQuotes: [] as string[],
+      keySentiments: [] as string[],
+      transcript: ''
+    }
+
+    // Extract summary
+    const summaryMatch = content.match(/\*\*.*?Summary.*?\*\*\s*\n+([\s\S]*?)(?=\n\*\*|$)/i)
+    if (summaryMatch) {
+      sections.summary = summaryMatch[1].trim()
+    }
+
+    // Extract key quotes
+    const quotesMatch = content.match(/\*\*Key Quotes:\*\*\s*([\s\S]*?)(?=\n\*\*|$)/i)
+    if (quotesMatch) {
+      const quotes = quotesMatch[1].match(/^\d+\.\s+.+$/gm) || []
+      sections.keyQuotes = quotes.map(q => q.replace(/^\d+\.\s+/, '').trim())
+    }
+
+    // Extract key sentiments
+    const sentimentsMatch = content.match(/\*\*Key Sentiments:\*\*\s*([\s\S]*?)(?=\n\*\*|$)/i)
+    if (sentimentsMatch) {
+      const sentiments = sentimentsMatch[1].match(/^\d+\.\s+.+$/gm) || []
+      sections.keySentiments = sentiments.map(s => s.replace(/^\d+\.\s+/, '').trim())
+    }
+
+    // If there's a transcript section, get a preview
+    const transcriptMatch = content.match(/\*\*.*?Transcript.*?\*\*\s*([\s\S]{200,1000})/i)
+    if (transcriptMatch) {
+      sections.transcript = transcriptMatch[1].trim().substring(0, 800) + '...'
+    }
+
+    return sections
   }
 
   const toggleExpand = async (id: string, filename: string) => {
@@ -171,8 +210,20 @@ export default function InterviewsPage() {
                         </div>
                       )}
                       {interview.summary && (
-                        <div className="mt-3 text-sm text-gray-700 leading-relaxed">
-                          <p className="line-clamp-3">{interview.summary}</p>
+                        <div className="mt-3 text-sm text-gray-800 leading-relaxed">
+                          <p className="line-clamp-2">{interview.summary}</p>
+                        </div>
+                      )}
+                      {interview.keyThemes && interview.keyThemes.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {interview.keyThemes.slice(0, 3).map((theme, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center text-xs text-gray-700 bg-gray-100 px-2.5 py-1 rounded-md"
+                            >
+                              {theme}
+                            </span>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -194,13 +245,73 @@ export default function InterviewsPage() {
                         <Loader2 className="h-6 w-6 animate-spin text-[#003B5C]" aria-hidden="true" />
                         <span className="ml-2 text-gray-600">Loading interview...</span>
                       </div>
-                    ) : (
-                      <div className="prose prose-sm max-w-none py-4">
-                        <pre className="whitespace-pre-wrap text-sm text-gray-900 leading-relaxed font-sans bg-white p-6 rounded-lg">
-                          {expandedContent}
-                        </pre>
-                      </div>
-                    )}
+                    ) : (() => {
+                      const sections = parseInterviewContent(expandedContent)
+                      const hasStructuredContent = sections.summary || sections.keyQuotes.length > 0 || sections.keySentiments.length > 0
+
+                      if (!hasStructuredContent) {
+                        // Fallback to showing raw content
+                        return (
+                          <div className="py-4">
+                            <pre className="whitespace-pre-wrap text-sm text-gray-800 leading-relaxed font-sans bg-white p-6 rounded-lg border border-gray-200">
+                              {expandedContent}
+                            </pre>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="py-6 space-y-6">
+                          {/* Summary */}
+                          {sections.summary && (
+                            <div className="bg-white p-6 rounded-lg border border-gray-200">
+                              <h3 className="text-base font-semibold text-gray-900 mb-3">Interview Summary</h3>
+                              <p className="text-sm text-gray-800 leading-relaxed">{sections.summary}</p>
+                            </div>
+                          )}
+
+                          {/* Key Quotes */}
+                          {sections.keyQuotes.length > 0 && (
+                            <div className="bg-white p-6 rounded-lg border border-gray-200">
+                              <h3 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                <span className="text-[#003B5C]">💬</span>
+                                Key Insights on Community & Connection
+                              </h3>
+                              <ul className="space-y-3">
+                                {sections.keyQuotes.map((quote, idx) => (
+                                  <li key={idx} className="text-sm text-gray-800 leading-relaxed pl-4 border-l-2 border-[#00A5E0]">
+                                    {quote}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Key Sentiments */}
+                          {sections.keySentiments.length > 0 && (
+                            <div className="bg-white p-6 rounded-lg border border-gray-200">
+                              <h3 className="text-base font-semibold text-gray-900 mb-4">Key Themes</h3>
+                              <ul className="space-y-2">
+                                {sections.keySentiments.map((sentiment, idx) => (
+                                  <li key={idx} className="flex items-start gap-2 text-sm text-gray-800">
+                                    <span className="text-[#00A5E0] mt-1">•</span>
+                                    <span>{sentiment}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                          {/* Transcript Preview */}
+                          {sections.transcript && (
+                            <div className="bg-white p-6 rounded-lg border border-gray-200">
+                              <h3 className="text-base font-semibold text-gray-900 mb-3">Interview Excerpt</h3>
+                              <p className="text-sm text-gray-700 leading-relaxed italic">{sections.transcript}</p>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </CardContent>
                 )}
               </Card>

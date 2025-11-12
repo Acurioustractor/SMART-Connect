@@ -12,6 +12,7 @@ export interface Interview {
   affiliation?: string
   status?: string
   summary?: string
+  keyThemes?: string[]
   filename: string
 }
 
@@ -43,36 +44,72 @@ export async function GET() {
       const affiliationMatch = content.match(/SRAU Affiliation:\s*(.+)$/m)
       const statusMatch = content.match(/Status:\s*(.+)$/m)
 
-      // Extract summary - try multiple patterns
+      // Extract structured summary and themes
       let summary = ''
+      const keyThemes: string[] = []
 
-      // Try to find "Summary of interview" or just "Summary" heading
-      const summaryHeadingMatch = content.match(/#+\s*Summary[^\n]*\n+([\s\S]*?)(?=\n#+|$)/)
-      if (summaryHeadingMatch) {
-        summary = summaryHeadingMatch[1].trim().substring(0, 400)
-      } else {
-        // Try to find key quotes or sentiments section
-        const keyQuotesMatch = content.match(/\*\*Key (Quotes|Sentiments):\*\*\s*([\s\S]*?)(?=\n\*\*|$)/)
-        if (keyQuotesMatch) {
-          summary = keyQuotesMatch[2].trim().substring(0, 400)
-        } else {
-          // Fall back to content after the metadata section
-          const contentAfterMeta = content.split('---').slice(2).join('---').trim()
-          if (contentAfterMeta && contentAfterMeta.length > 50) {
-            summary = contentAfterMeta.substring(0, 400)
-          }
+      // 1. Try to find the descriptive summary paragraph (after **Summary**)
+      const summaryBlockMatch = content.match(/\*\*.*?Summary.*?\*\*\s*\n+([\s\S]*?)(?=\n\*\*|$)/i)
+      if (summaryBlockMatch) {
+        summary = summaryBlockMatch[1].trim()
+        // Clean and format
+        summary = summary.replace(/\[[\s\S]*?\]\([\s\S]*?\)/g, '')
+        summary = summary.replace(/!\[[\s\S]*?\]/g, '')
+        summary = summary.replace(/#{1,6}\s/g, '')
+        summary = summary.split('\n').filter(line => line.trim()).join(' ')
+        if (summary.length > 350) {
+          summary = summary.substring(0, 350) + '...'
         }
       }
 
-      // Clean up summary
-      if (summary) {
-        summary = summary.replace(/\[[\s\S]*?\]\([\s\S]*?\)/g, '') // Remove markdown links
-        summary = summary.replace(/!\[[\s\S]*?\]/g, '') // Remove images
-        summary = summary.replace(/#{1,6}\s/g, '') // Remove heading markers
-        summary = summary.trim()
-        if (summary.length > 300) {
-          summary = summary.substring(0, 300) + '...'
+      // 2. Extract key themes from quotes section
+      const keyQuotesSection = content.match(/\*\*Key Quotes:\*\*\s*([\s\S]*?)(?=\n\*\*|$)/i)
+      if (keyQuotesSection) {
+        const quotes = keyQuotesSection[1].match(/^\d+\.\s+(?:On\s+)?([^:]+):/gm)
+        if (quotes) {
+          quotes.slice(0, 4).forEach(q => {
+            const theme = q.replace(/^\d+\.\s+(?:On\s+)?/, '').replace(/:$/, '').trim()
+            keyThemes.push(theme)
+          })
         }
+      }
+
+      // 3. Extract key sentiments
+      const sentimentsSection = content.match(/\*\*Key Sentiments:\*\*\s*([\s\S]*?)(?=\n\*\*|$)/i)
+      if (sentimentsSection) {
+        const sentiments = sentimentsSection[1].match(/^\d+\.\s+(.+?)(?:\.|$)/gm)
+        if (sentiments) {
+          sentiments.slice(0, 3).forEach(s => {
+            const theme = s.replace(/^\d+\.\s+/, '').replace(/\.$/, '').trim()
+            if (theme.length > 10 && theme.length < 100) {
+              keyThemes.push(theme)
+            }
+          })
+        }
+      }
+
+      // 4. Look for community/connection related quotes in the content
+      if (keyThemes.length === 0) {
+        const connectionKeywords = [
+          /connection.*?["']([^"']{20,150})["']/gi,
+          /community.*?["']([^"']{20,150})["']/gi,
+          /support.*?["']([^"']{20,150})["']/gi,
+          /facilitator.*?["']([^"']{20,150})["']/gi
+        ]
+
+        connectionKeywords.forEach(regex => {
+          const matches = content.matchAll(regex)
+          for (const match of matches) {
+            if (keyThemes.length < 5 && match[1]) {
+              keyThemes.push(match[1].substring(0, 80))
+            }
+          }
+        })
+      }
+
+      // 5. If still no summary, create from key themes
+      if (!summary && keyThemes.length > 0) {
+        summary = `Key themes: ${keyThemes.slice(0, 2).join('; ')}`
       }
 
       return {
@@ -85,6 +122,7 @@ export async function GET() {
         affiliation: affiliationMatch ? affiliationMatch[1].trim() : undefined,
         status: statusMatch ? statusMatch[1].trim() : undefined,
         summary,
+        keyThemes: keyThemes.slice(0, 5),
         filename
       }
     })
