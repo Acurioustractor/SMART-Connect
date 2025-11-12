@@ -14,11 +14,52 @@ import fs from 'fs'
 import path from 'path'
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
+import dotenv from 'dotenv'
+
+// Load environment variables from .env.local
+const envPath = path.join(process.cwd(), '.env.local')
+console.log(`Loading environment from: ${envPath}`)
+dotenv.config({ path: envPath })
+
+// Check required environment variables
+const requiredEnvVars = {
+  'NEXT_PUBLIC_SUPABASE_URL': process.env.NEXT_PUBLIC_SUPABASE_URL,
+  'SUPABASE_SERVICE_ROLE_KEY': process.env.SUPABASE_SERVICE_ROLE_KEY,
+  'OPENAI_API_KEY': process.env.OPENAI_API_KEY
+}
+
+console.log('\n🔍 Checking environment variables...')
+const missingVars: string[] = []
+for (const [key, value] of Object.entries(requiredEnvVars)) {
+  if (!value) {
+    missingVars.push(key)
+    console.log(`  ❌ ${key}: NOT SET`)
+  } else {
+    console.log(`  ✅ ${key}: ${value.substring(0, 20)}...`)
+  }
+}
+
+if (missingVars.length > 0) {
+  console.error('\n❌ ERROR: Missing required environment variables!\n')
+  console.error('Please add these to your .env.local file:')
+  missingVars.forEach(varName => {
+    console.error(`  ${varName}=your-value-here`)
+  })
+  console.error('\nGet your Supabase credentials from:')
+  console.error('  https://supabase.com/dashboard > Your Project > Settings > API')
+  console.error('\nYou need:')
+  console.error('  - Project URL (NEXT_PUBLIC_SUPABASE_URL)')
+  console.error('  - service_role key (SUPABASE_SERVICE_ROLE_KEY) - NOT the anon key!')
+  console.error('  - OpenAI API key (OPENAI_API_KEY)')
+  process.exit(1)
+}
+
+console.log('\n✅ All environment variables set!\n')
 
 // Initialize clients
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '', // Use service role for admin operations
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!, // Use service role for admin operations
   {
     auth: {
       autoRefreshToken: false,
@@ -28,7 +69,7 @@ const supabase = createClient(
 )
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
+  apiKey: process.env.OPENAI_API_KEY!,
 })
 
 interface InterviewMetadata {
