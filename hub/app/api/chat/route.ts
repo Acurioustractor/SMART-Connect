@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     const assistantMessage = completion.choices[0].message.content
 
     // Save to Supabase if configured
-    if (isSupabaseConfigured()) {
+    if (isSupabaseConfigured() && supabase) {
       try {
         let currentConversationId = conversationId
 

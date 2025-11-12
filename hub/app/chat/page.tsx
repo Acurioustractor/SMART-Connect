@@ -45,16 +45,18 @@ export default function ChatPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to get response')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to get response')
       }
 
       const data = await response.json()
       setMessages([...newMessages, data.message])
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error:', error)
+      const errorMessage = error.message || 'Unknown error occurred'
       setMessages([...newMessages, {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please make sure the API is configured correctly.'
+        content: `⚠️ Error: ${errorMessage}\n\nPlease check:\n• OpenAI API key is configured in .env.local\n• Dev server has been restarted after adding the key`
       }])
     } finally {
       setLoading(false)
