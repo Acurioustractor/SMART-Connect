@@ -95,7 +95,7 @@ async function startFullCrawl(targetUrl: string) {
 
   try {
     // Start Firecrawl crawl
-    const crawlResult: any = await firecrawl.crawlUrl(targetUrl, {
+    const crawlResult: any = await firecrawl.startCrawl(targetUrl, {
       limit: 1000,
       scrapeOptions: {
         formats: ['markdown', 'html'],
@@ -163,7 +163,7 @@ async function checkCrawlStatus(jobId: string) {
 
   try {
     // Check status with Firecrawl
-    const status: any = await firecrawl.checkCrawlStatus(job.firecrawl_job_id)
+    const status: any = await firecrawl.getCrawlStatus(job.firecrawl_job_id)
 
     console.log('Crawl status:', status)
 
@@ -242,7 +242,7 @@ async function processAndStoreCrawlResults(jobId: string) {
 
   try {
     // Get crawl results from Firecrawl
-    const status: any = await firecrawl.checkCrawlStatus(job.firecrawl_job_id!)
+    const status: any = await firecrawl.getCrawlStatus(job.firecrawl_job_id!)
     const pages = status.data || []
 
     console.log(`Processing ${pages.length} pages...`)
