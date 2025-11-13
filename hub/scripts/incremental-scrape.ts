@@ -219,12 +219,61 @@ async function scrapeUrls(urls: string[], label: string) {
 
   console.log(chalk.blue(`\n🚀 Scraping ${urls.length} ${label} URLs...\n`))
 
-  // TODO: Implement targeted scraping
-  // For now, inform user to use full scrape
-  console.log(chalk.yellow(`⚠️  Targeted scraping not yet implemented.`))
-  console.log(chalk.gray(`   To scrape these URLs, run a full scrape which will update them:`))
-  console.log(chalk.gray(`   npx tsx scripts/scrape-smart-site.ts\n`))
-  console.log(chalk.gray(`   (The system will update existing URLs automatically)\n`))
+  let successCount = 0
+  let errorCount = 0
+  const errors: string[] = []
+
+  for (const url of urls) {
+    try {
+      console.log(chalk.gray(`  Processing: ${url.slice(0, 80)}...`))
+
+      const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'scrape_single',
+          url,
+          parentUrl: TARGET_SITE
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        console.log(chalk.green(`    ✅ ${result.title || 'Scraped successfully'}`))
+        if (result.isPdf) {
+          console.log(chalk.magenta(`       📄 PDF processed`))
+        }
+        successCount++
+      } else {
+        console.log(chalk.red(`    ❌ Failed: ${result.error || 'Unknown error'}`))
+        errors.push(`${url}: ${result.error}`)
+        errorCount++
+      }
+
+    } catch (error: any) {
+      console.log(chalk.red(`    ❌ Error: ${error.message}`))
+      errors.push(`${url}: ${error.message}`)
+      errorCount++
+    }
+
+    // Rate limiting - wait 2 seconds between requests
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+
+  console.log(chalk.cyan(`\n📊 Scraping Summary:`))
+  console.log(chalk.green(`   ✅ Success: ${successCount}`))
+  console.log(chalk.red(`   ❌ Errors: ${errorCount}`))
+
+  if (errors.length > 0 && errors.length <= 5) {
+    console.log(chalk.yellow(`\n⚠️  Errors encountered:`))
+    errors.forEach(err => console.log(chalk.gray(`   - ${err}`)))
+  } else if (errors.length > 5) {
+    console.log(chalk.yellow(`\n⚠️  ${errors.length} errors encountered (showing first 5):`))
+    errors.slice(0, 5).forEach(err => console.log(chalk.gray(`   - ${err}`)))
+  }
+
+  console.log()
 }
 
 async function main() {

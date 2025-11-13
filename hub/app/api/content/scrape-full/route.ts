@@ -105,6 +105,9 @@ export async function POST(req: Request) {
       case 'check_processing':
         return await checkProcessingStatus(jobId)
 
+      case 'scrape_single':
+        return await scrapeSingleUrl(req)
+
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
@@ -322,6 +325,156 @@ async function startProcessing(jobId: string) {
     jobId,
     message: 'Processing started. Use check_processing action to monitor progress.'
   })
+}
+
+/**
+ * Scrape a single URL and store it
+ */
+async function scrapeSingleUrl(req: Request) {
+  const firecrawl = getFirecrawl()
+  const supabase = getSupabase()
+  const openai = getOpenAI()
+
+  const { url, parentUrl } = await req.json()
+
+  if (!url) {
+    return NextResponse.json({ error: 'URL is required' }, { status: 400 })
+  }
+
+  console.log(`Scraping single URL: ${url}`)
+
+  try {
+    // Scrape the URL with Firecrawl
+    const scrapeResult: any = await withRetry(
+      async () => firecrawl.scrapeUrl(url, {
+        formats: ['markdown', 'html'],
+        onlyMainContent: true,
+        includeTags: ['article', 'main', 'content', 'div'],
+        excludeTags: ['nav', 'footer', 'header', 'aside', 'script', 'style'],
+      }),
+      3,
+      2000,
+      `Scraping ${url}`
+    )
+
+    if (!scrapeResult || !scrapeResult.markdown) {
+      throw new Error('Failed to scrape URL - no content returned')
+    }
+
+    // Determine content type
+    const isPdf = url.toLowerCase().endsWith('.pdf')
+    const contentType = classifyContentType(url, scrapeResult.metadata?.title || '')
+
+    // Extract metadata
+    const title = scrapeResult.metadata?.title || extractTitleFromUrl(url)
+    const description = scrapeResult.metadata?.description || ''
+    const keywords = scrapeResult.metadata?.keywords?.split(',').map((k: string) => k.trim()) || []
+
+    // Calculate metrics
+    const content = scrapeResult.markdown || scrapeResult.html || ''
+    const wordCount = content.split(/\s+/).length
+    const readingTime = Math.ceil(wordCount / 200)
+
+    // Classify and tag
+    const category = classifyCategory(url, title, content)
+    const tags = extractTags(url, title, content)
+
+    // Store scraped content
+    const { data: scrapedContent, error: contentError } = await supabase
+      .from('scraped_content')
+      .upsert({
+        url,
+        title,
+        content,
+        markdown: scrapeResult.markdown || '',
+        content_type: contentType,
+        meta_description: description,
+        meta_keywords: keywords,
+        category,
+        tags,
+        word_count: wordCount,
+        reading_time_minutes: readingTime,
+        quality_score: calculateQualityScore(content, title, description),
+        relevance_score: calculateRelevanceScore(url, title, content),
+        scraped_at: new Date().toISOString(),
+        last_updated: new Date().toISOString(),
+        scrape_status: 'success',
+        external_links: scrapeResult.metadata?.links || [],
+        parent_url: parentUrl || null
+      }, {
+        onConflict: 'url',
+        ignoreDuplicates: false
+      })
+      .select()
+      .single()
+
+    if (contentError) {
+      throw new Error(`Failed to store content: ${contentError.message}`)
+    }
+
+    // Handle PDFs
+    if (isPdf && scrapedContent) {
+      await processPDF(supabase, scrapedContent.id, scrapeResult, url, title)
+    }
+
+    // Generate embeddings
+    if (scrapedContent) {
+      const embeddingCount = await generateAndStoreEmbeddings(
+        supabase,
+        openai,
+        scrapedContent.id,
+        content,
+        title,
+        contentType
+      )
+
+      return NextResponse.json({
+        success: true,
+        url,
+        title,
+        contentType,
+        isPdf,
+        wordCount,
+        embeddingCount,
+        scrapedContentId: scrapedContent.id
+      })
+    }
+
+    return NextResponse.json({
+      success: true,
+      url,
+      title,
+      contentType,
+      isPdf,
+      wordCount
+    })
+
+  } catch (error: any) {
+    console.error(`Failed to scrape ${url}:`, error)
+
+    // Store failed scrape record
+    await supabase
+      .from('scraped_content')
+      .upsert({
+        url,
+        title: extractTitleFromUrl(url),
+        content: '',
+        markdown: '',
+        scrape_status: 'failed',
+        error_message: error.message,
+        scraped_at: new Date().toISOString(),
+        last_updated: new Date().toISOString()
+      }, {
+        onConflict: 'url',
+        ignoreDuplicates: false
+      })
+
+    return NextResponse.json({
+      success: false,
+      url,
+      error: error.message
+    }, { status: 500 })
+  }
 }
 
 /**
