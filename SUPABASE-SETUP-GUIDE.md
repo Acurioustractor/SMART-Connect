@@ -30,7 +30,34 @@
    - **Project URL** (looks like: `https://abcdefgh.supabase.co`)
    - **anon/public key** (long string starting with `eyJ...`)
 
-### 4. Update Your Environment Variables
+### 4. Create Storage Bucket for PDFs
+
+1. In Supabase dashboard, click **"Storage"** (left sidebar)
+2. Click **"Create a new bucket"**
+3. Fill in:
+   - **Name:** `pdfs`
+   - **Public bucket:** Check this box (allows public access to downloaded PDFs)
+   - **File size limit:** Set to `50MB` (or higher if needed)
+   - **Allowed MIME types:** `application/pdf`
+4. Click **"Create bucket"**
+5. Click on the `pdfs` bucket → **"Policies"** tab
+6. Click **"New Policy"** → **"For full customization"**
+7. Add this policy to allow uploads:
+   ```sql
+   CREATE POLICY "Allow authenticated uploads"
+   ON storage.objects FOR INSERT
+   TO authenticated
+   WITH CHECK (bucket_id = 'pdfs');
+   ```
+8. Add this policy to allow public downloads:
+   ```sql
+   CREATE POLICY "Allow public downloads"
+   ON storage.objects FOR SELECT
+   TO public
+   USING (bucket_id = 'pdfs');
+   ```
+
+### 5. Update Your Environment Variables
 
 1. Open `hub/.env.local` (or create it if it doesn't exist)
 2. Add these lines:
@@ -42,10 +69,14 @@ OPENAI_API_KEY=your-openai-key-here
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
 ```
 
-3. Save the file
-4. Restart your dev server: `npm run dev`
+3. To get the service role key:
+   - Go to **Settings** → **API** in Supabase
+   - Copy the **service_role key** (⚠️ Keep this secret - never expose in client-side code!)
+4. Save the file
+5. Restart your dev server: `npm run dev`
 
 ---
 

@@ -493,6 +493,58 @@ async function processAndStoreCrawlResults(jobId: string) {
 }
 
 /**
+ * Download a PDF from a URL and store it in Supabase Storage
+ *
+ * SETUP REQUIRED: Before using this function, you must create a 'pdfs' bucket in Supabase Storage:
+ * 1. Go to Supabase Dashboard → Storage → Create bucket
+ * 2. Name: 'pdfs'
+ * 3. Make it public for easy access
+ * 4. Set appropriate size limits (e.g., 50MB per file)
+ *
+ * See SUPABASE-SETUP-GUIDE.md for detailed instructions.
+ */
+async function downloadAndStorePDF(
+  supabase: any,
+  pdfUrl: string,
+  title: string
+): Promise<string> {
+  // Download the PDF
+  const response = await fetch(pdfUrl)
+
+  if (!response.ok) {
+    throw new Error(`Failed to download PDF: ${response.status} ${response.statusText}`)
+  }
+
+  const arrayBuffer = await response.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+
+  // Generate a safe filename from the URL or title
+  const urlPath = new URL(pdfUrl).pathname
+  const originalFilename = urlPath.split('/').pop() || 'document.pdf'
+
+  // Create a unique filename with timestamp to avoid conflicts
+  const timestamp = Date.now()
+  const safeFilename = `${timestamp}-${originalFilename.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+  const storagePath = `smart-recovery/${safeFilename}`
+
+  // Upload to Supabase Storage
+  const { data, error } = await supabase.storage
+    .from('pdfs')
+    .upload(storagePath, buffer, {
+      contentType: 'application/pdf',
+      cacheControl: '3600',
+      upsert: false
+    })
+
+  if (error) {
+    throw new Error(`Failed to upload PDF to storage: ${error.message}`)
+  }
+
+  // Return the storage path
+  return storagePath
+}
+
+/**
  * Process a PDF document
  */
 async function processPDF(
@@ -504,12 +556,22 @@ async function processPDF(
 ) {
   const content = page.markdown || page.html || ''
 
+  // Download and store the actual PDF file
+  let filePath: string | null = null
+  try {
+    filePath = await downloadAndStorePDF(supabase, url, title)
+  } catch (error: any) {
+    console.error(`Failed to download PDF from ${url}:`, error.message)
+    // Continue even if PDF download fails - we still have extracted text
+  }
+
   const { error } = await supabase
     .from('pdf_documents')
     .upsert({
       scraped_content_id: scrapedContentId,
       title,
       url,
+      file_path: filePath,
       extracted_text: content,
       markdown_content: page.markdown,
       category: classifyPDFCategory(url, title),
