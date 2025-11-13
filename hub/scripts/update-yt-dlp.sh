@@ -34,24 +34,30 @@ echo ""
 echo "🔄 Updating yt-dlp..."
 echo ""
 
-# Try updating with pip first
-if command -v pip &> /dev/null || command -v pip3 &> /dev/null; then
+# Try updating with homebrew first on macOS (avoids externally-managed-environment error)
+if command -v brew &> /dev/null; then
+    echo "Using homebrew to update..."
+    brew upgrade yt-dlp 2>&1 | grep -v "already installed" || {
+        # If brew upgrade fails, try brew reinstall
+        echo "Trying brew reinstall..."
+        brew reinstall yt-dlp
+    }
+# Try updating with pip
+elif command -v pip &> /dev/null || command -v pip3 &> /dev/null; then
     echo "Using pip to update..."
     if command -v pip3 &> /dev/null; then
-        pip3 install -U yt-dlp
+        pip3 install -U yt-dlp --user || pip3 install -U yt-dlp --break-system-packages
     else
-        pip install -U yt-dlp
+        pip install -U yt-dlp --user || pip install -U yt-dlp --break-system-packages
     fi
-# Try updating with homebrew on macOS
-elif command -v brew &> /dev/null; then
-    echo "Using homebrew to update..."
-    brew upgrade yt-dlp
 # Try self-update (works if installed as binary)
 else
     echo "Attempting self-update..."
     yt-dlp -U || {
         echo "⚠️  Self-update failed. Please update manually using:"
-        echo "  pip install -U yt-dlp"
+        echo "  brew install yt-dlp  (on macOS)"
+        echo "  OR"
+        echo "  pip install -U yt-dlp --user"
         exit 1
     }
 fi
