@@ -60,6 +60,34 @@ async function withTimeout<T>(
   }
 }
 
+/**
+ * Retry a function with exponential backoff
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  initialDelayMs: number = 1000,
+  errorContext: string = 'Operation'
+): Promise<T> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn()
+    } catch (error: any) {
+      lastError = error
+
+      if (attempt < maxRetries) {
+        const delayMs = initialDelayMs * Math.pow(2, attempt)
+        console.log(`${errorContext} failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`)
+        await new Promise(resolve => setTimeout(resolve, delayMs))
+      }
+    }
+  }
+
+  throw lastError || new Error(`${errorContext} failed after ${maxRetries + 1} attempts`)
+}
+
 export async function POST(req: Request) {
   try {
     const { action, url, jobId } = await req.json()
@@ -362,6 +390,7 @@ async function processAndStoreCrawlResults(jobId: string) {
     console.log(`Processing ${pages.length} pages...`)
 
     let processedCount = 0
+    let skippedCount = 0
     let pdfCount = 0
     let embeddingCount = 0
     const errors: string[] = []
@@ -372,6 +401,12 @@ async function processAndStoreCrawlResults(jobId: string) {
         const url = page.metadata?.sourceURL || page.url
         const isPdf = url.toLowerCase().endsWith('.pdf')
         const contentType = classifyContentType(url, page.metadata?.title || '')
+
+        // Filter out low-value pages
+        if (shouldSkipPage(url, page.metadata?.title || '', page.markdown || page.html || '')) {
+          skippedCount++
+          continue
+        }
 
         // Extract metadata
         const title = page.metadata?.title || extractTitleFromUrl(url)
@@ -387,46 +422,61 @@ async function processAndStoreCrawlResults(jobId: string) {
         const category = classifyCategory(url, title, content)
         const tags = extractTags(url, title, content)
 
-        // Store scraped content
-        const { data: scrapedContent, error: contentError } = await supabase
-          .from('scraped_content')
-          .upsert({
-            url,
-            title,
-            content,
-            markdown: page.markdown || '',
-            content_type: contentType,
-            meta_description: description,
-            meta_keywords: keywords,
-            category,
-            tags,
-            word_count: wordCount,
-            reading_time_minutes: readingTime,
-            quality_score: calculateQualityScore(content, title, description),
-            relevance_score: calculateRelevanceScore(url, title, content),
-            scraped_at: new Date().toISOString(),
-            last_updated: new Date().toISOString(),
-            scrape_status: 'success',
-            external_links: page.metadata?.links || [],
-            parent_url: job.target_url
-          }, {
-            onConflict: 'url',
-            ignoreDuplicates: false
-          })
-          .select()
-          .single()
+        // Store scraped content with retry
+        const scrapedContent = await withRetry(async () => {
+          const { data, error } = await supabase
+            .from('scraped_content')
+            .upsert({
+              url,
+              title,
+              content,
+              markdown: page.markdown || '',
+              content_type: contentType,
+              meta_description: description,
+              meta_keywords: keywords,
+              category,
+              tags,
+              word_count: wordCount,
+              reading_time_minutes: readingTime,
+              quality_score: calculateQualityScore(content, title, description),
+              relevance_score: calculateRelevanceScore(url, title, content),
+              scraped_at: new Date().toISOString(),
+              last_updated: new Date().toISOString(),
+              scrape_status: 'success',
+              external_links: page.metadata?.links || [],
+              parent_url: job.target_url
+            }, {
+              onConflict: 'url',
+              ignoreDuplicates: false
+            })
+            .select()
+            .single()
 
-        if (contentError) {
-          errors.push(`Failed to store ${url}: ${contentError.message}`)
+          if (error) throw error
+          return data
+        }, 3, 1000, `Storing content for ${url}`)
+
+        if (!scrapedContent) {
+          errors.push(`Failed to store ${url} after retries`)
           continue
         }
 
         processedCount++
 
-        // Handle PDFs separately
+        // Handle PDFs separately with retry
         if (isPdf) {
-          await processPDF(supabase, scrapedContent.id, page, url, title)
-          pdfCount++
+          try {
+            await withRetry(
+              async () => processPDF(supabase, scrapedContent.id, page, url, title),
+              2,
+              1000,
+              `Processing PDF ${url}`
+            )
+            pdfCount++
+          } catch (pdfError: any) {
+            errors.push(`Failed to process PDF ${url}: ${pdfError.message}`)
+            console.error(`Failed to process PDF ${url}:`, pdfError)
+          }
         }
 
         // Generate and store embeddings
@@ -456,8 +506,10 @@ async function processAndStoreCrawlResults(jobId: string) {
         }
 
       } catch (error: any) {
-        errors.push(`Error processing page: ${error.message}`)
-        console.error('Error processing page:', error)
+        const url = page?.metadata?.sourceURL || page?.url || 'unknown'
+        const title = page?.metadata?.title || 'untitled'
+        errors.push(`Error processing ${title} (${url}): ${error.message}`)
+        console.error(`Error processing page ${url}:`, error.message)
       }
     }
 
@@ -477,7 +529,13 @@ async function processAndStoreCrawlResults(jobId: string) {
     // Generate initial recommendations based on content
     await generateInitialRecommendations(supabase, job.id)
 
-    console.log(`✅ Processing complete: ${processedCount} pages, ${embeddingCount} embeddings`)
+    console.log(`✅ Processing complete!`)
+    console.log(`   Total pages: ${pages.length}`)
+    console.log(`   ✓ Processed: ${processedCount}`)
+    console.log(`   ⊘ Skipped (low-value): ${skippedCount}`)
+    console.log(`   ✗ Errors: ${errors.length}`)
+    console.log(`   📄 PDFs: ${pdfCount}`)
+    console.log(`   🔍 Embeddings: ${embeddingCount}`)
 
   } catch (error: any) {
     console.error('Failed to process results:', error)
@@ -586,7 +644,7 @@ async function processPDF(
     })
 
   if (error) {
-    console.error('Failed to store PDF:', error)
+    throw new Error(`Failed to store PDF metadata: ${error.message} (${error.code})`)
   }
 }
 
@@ -762,6 +820,54 @@ async function generateInitialRecommendations(supabase: any, jobId: string) {
 // ======================
 // HELPER FUNCTIONS
 // ======================
+
+/**
+ * Determine if a page should be skipped based on quality signals
+ */
+function shouldSkipPage(url: string, title: string, content: string): boolean {
+  const urlLower = url.toLowerCase()
+  const titleLower = title.toLowerCase()
+
+  // Skip image and asset files
+  const assetExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp', '.ico', '.css', '.js']
+  if (assetExtensions.some(ext => urlLower.endsWith(ext))) {
+    return true
+  }
+
+  // Skip asset pages (Hubfs, etc.)
+  if (urlLower.includes('/hubfs/') || titleLower === 'hubfs' || titleLower === 'untitled') {
+    return true
+  }
+
+  // Skip 404 pages
+  if (titleLower.includes('page not found') || titleLower.includes('404') || titleLower === 'not found') {
+    return true
+  }
+
+  // Skip pages with very little content (less than 50 words)
+  const wordCount = content.trim().split(/\s+/).length
+  if (wordCount < 50 && !urlLower.endsWith('.pdf')) {
+    return true
+  }
+
+  // Skip pages that are just addresses (meeting locations)
+  // These typically have short titles with street numbers and few words
+  const hasStreetNumber = /^\d+\s/.test(title)
+  const isShortTitle = title.split(/\s+/).length < 8
+  const hasAddressKeywords = /\b(st|street|rd|road|ave|avenue|dr|drive|nsw|vic|qld|sa|wa|tas|act|nt)\b/i.test(title)
+
+  if (hasStreetNumber && isShortTitle && hasAddressKeywords && wordCount < 100) {
+    return true
+  }
+
+  // Skip query parameter URLs (usually duplicates)
+  const urlObj = new URL(url)
+  if (urlObj.search && urlObj.search.length > 50) {
+    return true
+  }
+
+  return false
+}
 
 function classifyContentType(url: string, title: string): string {
   const lower = url.toLowerCase()
