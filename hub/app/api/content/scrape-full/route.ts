@@ -342,9 +342,9 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
   console.log(`Scraping single URL: ${url}`)
 
   try {
-    // Scrape the URL with Firecrawl
+    // Scrape the URL with Firecrawl (using v2 API)
     const scrapeResult: any = await withRetry(
-      async () => firecrawl.scrapeUrl(url, {
+      async () => firecrawl.scrape(url, {
         formats: ['markdown', 'html'],
         onlyMainContent: true,
         includeTags: ['article', 'main', 'content', 'div'],
@@ -355,21 +355,24 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
       `Scraping ${url}`
     )
 
-    if (!scrapeResult || !scrapeResult.markdown) {
+    // v2 API returns data in a different structure
+    const data = scrapeResult.data || scrapeResult
+
+    if (!data || !data.markdown) {
       throw new Error('Failed to scrape URL - no content returned')
     }
 
     // Determine content type
     const isPdf = url.toLowerCase().endsWith('.pdf')
-    const contentType = classifyContentType(url, scrapeResult.metadata?.title || '')
+    const contentType = classifyContentType(url, data.metadata?.title || '')
 
     // Extract metadata
-    const title = scrapeResult.metadata?.title || extractTitleFromUrl(url)
-    const description = scrapeResult.metadata?.description || ''
-    const keywords = scrapeResult.metadata?.keywords?.split(',').map((k: string) => k.trim()) || []
+    const title = data.metadata?.title || extractTitleFromUrl(url)
+    const description = data.metadata?.description || ''
+    const keywords = data.metadata?.keywords?.split(',').map((k: string) => k.trim()) || []
 
     // Calculate metrics
-    const content = scrapeResult.markdown || scrapeResult.html || ''
+    const content = data.markdown || data.html || ''
     const wordCount = content.split(/\s+/).length
     const readingTime = Math.ceil(wordCount / 200)
 
@@ -384,7 +387,7 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
         url,
         title,
         content,
-        markdown: scrapeResult.markdown || '',
+        markdown: data.markdown || '',
         content_type: contentType,
         meta_description: description,
         meta_keywords: keywords,
@@ -397,7 +400,7 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
         scraped_at: new Date().toISOString(),
         last_updated: new Date().toISOString(),
         scrape_status: 'success',
-        external_links: scrapeResult.metadata?.links || [],
+        external_links: data.metadata?.links || [],
         parent_url: parentUrl || null
       }, {
         onConflict: 'url',
@@ -412,7 +415,7 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
 
     // Handle PDFs
     if (isPdf && scrapedContent) {
-      await processPDF(supabase, scrapedContent.id, scrapeResult, url, title)
+      await processPDF(supabase, scrapedContent.id, data, url, title)
     }
 
     // Generate embeddings
