@@ -35,10 +35,9 @@ interface JobStatus {
 
 interface ProcessResults {
   success: boolean
-  processed?: number
-  pdfs?: number
-  embeddings?: number
-  errors?: string[]
+  pagesProcessed?: number
+  pdfsProcessed?: number
+  errorsCount?: number
   error?: string
 }
 
@@ -97,27 +96,37 @@ async function main() {
     console.log(`   Pages scraped: ${completedCrawl.completed}`)
     console.log()
 
-    // Step 3: Process and store results
+    // Step 3: Start processing and monitor progress
     console.log('Step 3: Processing results and generating embeddings...')
     console.log('   This may take several minutes for large sites...')
-    const processResult = await processResults(crawlResult.jobId)
+    const startProcessResult = await startProcessing(crawlResult.jobId)
 
-    if (!processResult.success) {
-      throw new Error(processResult.error || 'Failed to process results')
+    if (!startProcessResult.success) {
+      throw new Error(startProcessResult.error || 'Failed to start processing')
+    }
+
+    console.log(`✅ Processing started`)
+    console.log()
+
+    // Step 4: Monitor processing progress
+    console.log('Step 4: Monitoring processing progress...')
+    const completedProcess = await monitorProcessing(crawlResult.jobId)
+
+    if (!completedProcess.success) {
+      throw new Error('Processing failed or timed out')
     }
 
     console.log(`✅ Processing completed!`)
-    console.log(`   Pages processed: ${processResult.processed}`)
-    console.log(`   PDFs extracted: ${processResult.pdfs}`)
-    console.log(`   Embeddings generated: ${processResult.embeddings}`)
+    console.log(`   Pages processed: ${completedProcess.pagesProcessed}`)
+    console.log(`   PDFs extracted: ${completedProcess.pdfsProcessed}`)
 
-    if (processResult.errors && processResult.errors.length > 0) {
-      console.log(`   ⚠️  Errors: ${processResult.errors.length}`)
-      console.log(`   (Check logs for details)`)
+    if (completedProcess.errorsCount > 0) {
+      console.log(`   ⚠️  Errors: ${completedProcess.errorsCount}`)
+      console.log(`   (Check server logs for details)`)
     }
     console.log()
 
-    // Step 4: Summary
+    // Step 5: Summary
     console.log('=' .repeat(60))
     console.log('🎉 SCRAPING COMPLETE!')
     console.log('=' .repeat(60))
@@ -237,9 +246,9 @@ async function monitorCrawl(jobId: string): Promise<JobStatus> {
 }
 
 /**
- * Process crawl results
+ * Start processing crawl results
  */
-async function processResults(jobId: string): Promise<ProcessResults> {
+async function startProcessing(jobId: string): Promise<JobStatus> {
   try {
     const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
       method: 'POST',
@@ -252,7 +261,7 @@ async function processResults(jobId: string): Promise<ProcessResults> {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.details || error.error || 'Failed to process results')
+      throw new Error(error.details || error.error || 'Failed to start processing')
     }
 
     return await response.json()
@@ -261,6 +270,70 @@ async function processResults(jobId: string): Promise<ProcessResults> {
       success: false,
       error: error.message
     }
+  }
+}
+
+/**
+ * Monitor processing progress until complete
+ */
+async function monitorProcessing(jobId: string): Promise<ProcessResults> {
+  const maxAttempts = 360 // 60 minutes with 10s intervals
+  let attempts = 0
+
+  while (attempts < maxAttempts) {
+    try {
+      const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'check_processing',
+          jobId
+        })
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.details || error.error || 'Failed to check processing status')
+      }
+
+      const status: any = await response.json()
+
+      // Update progress display
+      if (status.pagesProcessed !== undefined && status.pagesScraped !== undefined) {
+        const progress = status.pagesScraped > 0
+          ? Math.round((status.pagesProcessed / status.pagesScraped) * 100)
+          : 0
+        process.stdout.write(
+          `\r   Progress: ${status.pagesProcessed}/${status.pagesScraped} pages (${progress}%)   `
+        )
+      }
+
+      // Check if complete
+      if (status.isComplete) {
+        console.log() // New line after progress
+        return {
+          success: true,
+          pagesProcessed: status.pagesProcessed,
+          pdfsProcessed: status.pdfsProcessed,
+          errorsCount: status.errorsCount
+        }
+      }
+
+      // Wait before checking again
+      await sleep(10000) // 10 seconds
+      attempts++
+
+    } catch (error: any) {
+      console.error(`\n   Error checking processing status: ${error.message}`)
+      await sleep(10000)
+      attempts++
+    }
+  }
+
+  // Timeout
+  return {
+    success: false,
+    error: 'Processing timeout after 60 minutes'
   }
 }
 

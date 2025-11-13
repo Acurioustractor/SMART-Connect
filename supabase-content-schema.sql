@@ -338,12 +338,13 @@ CREATE TABLE IF NOT EXISTS public.scraping_jobs (
   target_url TEXT NOT NULL,
 
   -- Status
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'processing', 'processed')),
   progress_percent INTEGER DEFAULT 0,
 
   -- Results
   pages_discovered INTEGER DEFAULT 0,
   pages_scraped INTEGER DEFAULT 0,
+  pages_processed INTEGER DEFAULT 0, -- Number of pages processed (embeddings generated)
   pdfs_found INTEGER DEFAULT 0,
   pdfs_processed INTEGER DEFAULT 0,
   errors_count INTEGER DEFAULT 0,
@@ -352,8 +353,10 @@ CREATE TABLE IF NOT EXISTS public.scraping_jobs (
   config JSONB, -- Scraping configuration used
 
   -- Timing
-  started_at TIMESTAMP WITH TIME ZONE,
-  completed_at TIMESTAMP WITH TIME ZONE,
+  started_at TIMESTAMP WITH TIME ZONE, -- When crawl started
+  completed_at TIMESTAMP WITH TIME ZONE, -- When crawl completed
+  processing_started_at TIMESTAMP WITH TIME ZONE, -- When processing started
+  processing_completed_at TIMESTAMP WITH TIME ZONE, -- When processing completed
   duration_seconds INTEGER,
 
   -- Error handling

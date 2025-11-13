@@ -46,7 +46,10 @@ export async function POST(req: Request) {
         return await checkCrawlStatus(jobId)
 
       case 'process_results':
-        return await processAndStoreCrawlResults(jobId)
+        return await startProcessing(jobId)
+
+      case 'check_processing':
+        return await checkProcessingStatus(jobId)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -215,6 +218,85 @@ async function checkCrawlStatus(jobId: string) {
 }
 
 /**
+ * Start processing crawl results asynchronously
+ */
+async function startProcessing(jobId: string) {
+  const supabase = getSupabase()
+
+  // Get job from database
+  const { data: job, error: jobError } = await supabase
+    .from('scraping_jobs')
+    .select('*')
+    .eq('id', jobId)
+    .single()
+
+  if (jobError || !job) {
+    return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+  }
+
+  if (job.status !== 'completed') {
+    return NextResponse.json({
+      error: 'Crawl job not completed yet',
+      currentStatus: job.status
+    }, { status: 400 })
+  }
+
+  // Update job status to processing
+  await supabase
+    .from('scraping_jobs')
+    .update({
+      status: 'processing',
+      processing_started_at: new Date().toISOString()
+    })
+    .eq('id', jobId)
+
+  // Start background processing (don't await)
+  processAndStoreCrawlResults(jobId).catch(error => {
+    console.error('Background processing error:', error)
+  })
+
+  return NextResponse.json({
+    success: true,
+    jobId,
+    message: 'Processing started. Use check_processing action to monitor progress.'
+  })
+}
+
+/**
+ * Check processing status
+ */
+async function checkProcessingStatus(jobId: string) {
+  const supabase = getSupabase()
+
+  const { data: job, error: jobError } = await supabase
+    .from('scraping_jobs')
+    .select('*')
+    .eq('id', jobId)
+    .single()
+
+  if (jobError || !job) {
+    return NextResponse.json({ error: 'Job not found' }, { status: 404 })
+  }
+
+  const isProcessing = job.status === 'processing'
+  const isComplete = job.status === 'processed' || job.processing_completed_at !== null
+
+  return NextResponse.json({
+    success: true,
+    jobId,
+    status: job.status,
+    isProcessing,
+    isComplete,
+    pagesScraped: job.pages_scraped || 0,
+    pagesProcessed: job.pages_processed || 0,
+    pdfsProcessed: job.pdfs_processed || 0,
+    errorsCount: job.errors_count || 0,
+    processingStartedAt: job.processing_started_at,
+    processingCompletedAt: job.processing_completed_at
+  })
+}
+
+/**
  * Process crawl results and store in Supabase with embeddings
  */
 async function processAndStoreCrawlResults(jobId: string) {
@@ -230,14 +312,8 @@ async function processAndStoreCrawlResults(jobId: string) {
     .single()
 
   if (jobError || !job) {
-    return NextResponse.json({ error: 'Job not found' }, { status: 404 })
-  }
-
-  if (job.status !== 'completed') {
-    return NextResponse.json({
-      error: 'Job not completed yet',
-      currentStatus: job.status
-    }, { status: 400 })
+    console.error('Job not found:', jobId)
+    return
   }
 
   try {
@@ -328,33 +404,42 @@ async function processAndStoreCrawlResults(jobId: string) {
 
         console.log(`Processed ${processedCount}/${pages.length}: ${title}`)
 
+        // Update progress every 10 pages
+        if (processedCount % 10 === 0) {
+          await supabase
+            .from('scraping_jobs')
+            .update({
+              pages_processed: processedCount,
+              pdfs_processed: pdfCount,
+              errors_count: errors.length,
+              progress_percent: Math.round((processedCount / pages.length) * 100)
+            })
+            .eq('id', jobId)
+        }
+
       } catch (error: any) {
         errors.push(`Error processing page: ${error.message}`)
         console.error('Error processing page:', error)
       }
     }
 
-    // Update job with final stats
+    // Update job with final stats and mark as complete
     await supabase
       .from('scraping_jobs')
       .update({
-        pages_scraped: processedCount,
+        status: 'processed',
+        pages_processed: processedCount,
         pdfs_processed: pdfCount,
-        errors_count: errors.length
+        errors_count: errors.length,
+        progress_percent: 100,
+        processing_completed_at: new Date().toISOString()
       })
       .eq('id', jobId)
 
     // Generate initial recommendations based on content
     await generateInitialRecommendations(supabase, job.id)
 
-    return NextResponse.json({
-      success: true,
-      processed: processedCount,
-      pdfs: pdfCount,
-      embeddings: embeddingCount,
-      errors: errors.length > 0 ? errors : undefined,
-      message: `Successfully processed ${processedCount} pages with ${embeddingCount} embeddings`
-    })
+    console.log(`✅ Processing complete: ${processedCount} pages, ${embeddingCount} embeddings`)
 
   } catch (error: any) {
     console.error('Failed to process results:', error)
@@ -366,11 +451,6 @@ async function processAndStoreCrawlResults(jobId: string) {
         error_message: error.message
       })
       .eq('id', jobId)
-
-    return NextResponse.json({
-      error: 'Failed to process results',
-      details: error.message
-    }, { status: 500 })
   }
 }
 
