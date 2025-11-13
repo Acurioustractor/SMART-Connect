@@ -4,6 +4,12 @@
  * Or from hub/scripts directory: npx tsx import-media-data.ts
  */
 
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
+
 // Media data provided by user
 const mediaData = [
   {
