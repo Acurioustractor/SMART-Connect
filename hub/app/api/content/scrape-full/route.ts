@@ -355,10 +355,27 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
       `Scraping ${url}`
     )
 
-    // v2 API returns data in a different structure
-    const data = scrapeResult.data || scrapeResult
+    // Log the full response for debugging
+    console.log('Firecrawl response:', JSON.stringify(scrapeResult, null, 2).substring(0, 500))
 
-    if (!data || !data.markdown) {
+    // v2 API structure: { success: boolean, data: { markdown, html, metadata } }
+    if (!scrapeResult.success) {
+      throw new Error(`Firecrawl scrape failed: ${scrapeResult.error || 'Unknown error'}`)
+    }
+
+    const data = scrapeResult.data
+
+    // Log the response structure for debugging
+    console.log('Has data property:', !!scrapeResult.data)
+    console.log('Has markdown:', !!(data?.markdown))
+    console.log('Has html:', !!(data?.html))
+    console.log('Has content:', !!(data?.content))
+
+    // Check multiple possible content fields
+    const content = data?.markdown || data?.html || data?.content || ''
+
+    if (!content || content.trim().length === 0) {
+      console.error('Empty content from Firecrawl for URL:', url)
       throw new Error('Failed to scrape URL - no content returned')
     }
 
@@ -371,8 +388,7 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
     const description = data.metadata?.description || ''
     const keywords = data.metadata?.keywords?.split(',').map((k: string) => k.trim()) || []
 
-    // Calculate metrics
-    const content = data.markdown || data.html || ''
+    // Calculate metrics (content already extracted above)
     const wordCount = content.split(/\s+/).length
     const readingTime = Math.ceil(wordCount / 200)
 
@@ -387,7 +403,7 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
         url,
         title,
         content,
-        markdown: data.markdown || '',
+        markdown: data.markdown || data.html || content,
         content_type: contentType,
         meta_description: description,
         meta_keywords: keywords,
