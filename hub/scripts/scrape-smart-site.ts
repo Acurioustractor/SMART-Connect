@@ -211,12 +211,14 @@ async function startCrawl(): Promise<JobStatus> {
 async function monitorCrawl(jobId: string): Promise<JobStatus> {
   const maxAttempts = 120 // 20 minutes with 10s intervals
   let attempts = 0
+  let consecutiveErrors = 0
+  const maxConsecutiveErrors = 5
 
   while (attempts < maxAttempts) {
     try {
-      // Use a 90-second timeout for status checks (Firecrawl API can be slow during active crawling)
+      // Use a 150-second timeout (longer than server's 120s timeout to avoid premature aborts)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 150000) // 150 seconds
 
       const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
         method: 'POST',
@@ -234,6 +236,9 @@ async function monitorCrawl(jobId: string): Promise<JobStatus> {
       }
 
       const status: JobStatus = await response.json()
+
+      // Reset consecutive error counter on success
+      consecutiveErrors = 0
 
       // Update progress display
       if (status.progress !== undefined && status.completed !== undefined && status.total !== undefined) {
@@ -253,8 +258,24 @@ async function monitorCrawl(jobId: string): Promise<JobStatus> {
       attempts++
 
     } catch (error: any) {
-      console.error(`\n   Error checking status: ${error.message}`)
-      await sleep(10000)
+      consecutiveErrors++
+
+      // Only log every 3rd error to avoid cluttering output
+      if (consecutiveErrors % 3 === 1 || consecutiveErrors >= maxConsecutiveErrors) {
+        console.error(`\n   Error checking status (${consecutiveErrors} consecutive): ${error.message}`)
+      }
+
+      // If we hit too many consecutive errors, fail fast
+      if (consecutiveErrors >= maxConsecutiveErrors) {
+        return {
+          success: false,
+          error: `Failed after ${maxConsecutiveErrors} consecutive errors. Last error: ${error.message}`
+        }
+      }
+
+      // Exponential backoff on errors: 10s, 15s, 20s, 30s, 45s
+      const backoffTime = Math.min(10000 * Math.pow(1.5, consecutiveErrors - 1), 45000)
+      await sleep(backoffTime)
       attempts++
     }
   }
@@ -305,12 +326,14 @@ async function startProcessing(jobId: string): Promise<JobStatus> {
 async function monitorProcessing(jobId: string): Promise<ProcessResults> {
   const maxAttempts = 360 // 60 minutes with 10s intervals
   let attempts = 0
+  let consecutiveErrors = 0
+  const maxConsecutiveErrors = 5
 
   while (attempts < maxAttempts) {
     try {
-      // Use a 90-second timeout for processing status checks
+      // Use a 150-second timeout (longer than server's 120s timeout to avoid premature aborts)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 150000) // 150 seconds
 
       const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
         method: 'POST',
@@ -328,6 +351,9 @@ async function monitorProcessing(jobId: string): Promise<ProcessResults> {
       }
 
       const status: any = await response.json()
+
+      // Reset consecutive error counter on success
+      consecutiveErrors = 0
 
       // Update progress display
       if (status.pagesProcessed !== undefined && status.pagesScraped !== undefined) {
@@ -355,8 +381,24 @@ async function monitorProcessing(jobId: string): Promise<ProcessResults> {
       attempts++
 
     } catch (error: any) {
-      console.error(`\n   Error checking processing status: ${error.message}`)
-      await sleep(10000)
+      consecutiveErrors++
+
+      // Only log every 3rd error to avoid cluttering output
+      if (consecutiveErrors % 3 === 1 || consecutiveErrors >= maxConsecutiveErrors) {
+        console.error(`\n   Error checking processing status (${consecutiveErrors} consecutive): ${error.message}`)
+      }
+
+      // If we hit too many consecutive errors, fail fast
+      if (consecutiveErrors >= maxConsecutiveErrors) {
+        return {
+          success: false,
+          error: `Failed after ${maxConsecutiveErrors} consecutive errors. Last error: ${error.message}`
+        }
+      }
+
+      // Exponential backoff on errors: 10s, 15s, 20s, 30s, 45s
+      const backoffTime = Math.min(10000 * Math.pow(1.5, consecutiveErrors - 1), 45000)
+      await sleep(backoffTime)
       attempts++
     }
   }
