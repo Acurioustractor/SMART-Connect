@@ -158,35 +158,40 @@ export default function MediaDetailPage() {
 
   if (loading) {
     return (
-      <Container className="py-8">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading media details...</p>
-        </div>
-      </Container>
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
+        <Container className="py-8">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading media details...</p>
+          </div>
+        </Container>
+      </div>
     );
   }
 
   if (!mediaItem) {
     return (
-      <Container className="py-8">
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-gray-600">Media item not found.</p>
-            <Link href="/media">
-              <Button className="mt-4" variant="outline">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Media Library
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </Container>
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
+        <Container className="py-8">
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-gray-600">Media item not found.</p>
+              <Link href="/media">
+                <Button className="mt-4" variant="outline">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Media Library
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </Container>
+      </div>
     );
   }
 
   return (
-    <Container className="py-8">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
+      <Container className="py-8">
       {/* Header */}
       <div className="mb-6">
         <Link href="/media">
@@ -377,6 +382,7 @@ export default function MediaDetailPage() {
           </CardContent>
         </Card>
       )}
-    </Container>
+      </Container>
+    </div>
   );
 }

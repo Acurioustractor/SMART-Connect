@@ -63,7 +63,7 @@ export default function ToolsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
       <Container size="xl" className="py-12">
         {/* Header */}
         <div className="mb-12 text-center max-w-3xl mx-auto">

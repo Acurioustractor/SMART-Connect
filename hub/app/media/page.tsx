@@ -222,13 +222,14 @@ export default function MediaPage() {
   };
 
   return (
-    <Container className="py-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2">Media Library</h1>
-        <p className="text-gray-600">
-          Browse interviews, podcasts, and videos featuring SMART Recovery Australia
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
+      <Container className="py-8">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2 text-gray-900">Media Library</h1>
+          <p className="text-gray-600">
+            Browse interviews, podcasts, and videos featuring SMART Recovery Australia
+          </p>
+        </div>
 
       {/* Filters */}
       <Card className="mb-6">
@@ -683,6 +684,7 @@ export default function MediaPage() {
         )}
         </>
       )}
-    </Container>
+      </Container>
+    </div>
   );
 }

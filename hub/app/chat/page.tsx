@@ -86,7 +86,7 @@ export default function ChatPage() {
   ]
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gradient-to-b from-blue-50 via-white to-gray-50">
       <Container size="xl" className="flex flex-col h-full py-6">
         {/* Header */}
         <div className="mb-6">
