@@ -177,7 +177,7 @@ const mediaData = [
 ];
 
 async function importMediaData() {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3080';
 
   console.log('Starting media import...');
   console.log(`Importing ${mediaData.length} items to ${baseUrl}/api/media/import`);
