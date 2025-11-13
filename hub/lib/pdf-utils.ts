@@ -1,6 +1,3 @@
-// Use require for pdf-parse since it's a CommonJS module
-const pdfParse = require('pdf-parse')
-
 /**
  * Extract text content from a PDF buffer
  *
@@ -13,6 +10,8 @@ export async function extractPDFText(pdfBuffer: Buffer): Promise<{
   info: any
 }> {
   try {
+    // Lazy load pdf-parse to avoid initialization issues at module load time
+    const pdfParse = require('pdf-parse')
     const data = await pdfParse(pdfBuffer)
 
     return {
