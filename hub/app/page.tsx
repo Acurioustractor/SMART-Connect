@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { MessageCircle, Wrench, CheckCircle2, Sparkles, Users, Shield, Globe, FileText } from 'lucide-react'
+import { MessageCircle, Wrench, CheckCircle2, Sparkles, Users, Shield, Globe, FileText, Search } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Container } from '@/components/ui/container'
 import { Button } from '@/components/ui/button'
@@ -42,7 +42,7 @@ export default function Home() {
       {/* Feature Cards */}
       <section className="py-12">
         <Container size="lg">
-          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 mb-16">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
             <Link href="/chat" className="block group">
               <Card className="h-full hover:shadow-xl transition-all duration-300 group-hover:border-[#00A5E0]">
                 <CardHeader>
@@ -72,6 +72,41 @@ export default function Home() {
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
                       <span>Get strategic recommendations</span>
+                    </li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </Link>
+
+            <Link href="/discovery" className="block group">
+              <Card className="h-full hover:shadow-xl transition-all duration-300 group-hover:border-[#00A5E0]">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="p-3 bg-[#00A5E0]/10 rounded-lg mb-4">
+                      <Search className="h-8 w-8 text-[#00A5E0]" aria-hidden="true" />
+                    </div>
+                    <span className="text-xs font-medium text-[#06D6A0] bg-[#06D6A0]/10 px-3 py-1 rounded-full">
+                      Active
+                    </span>
+                  </div>
+                  <CardTitle>Content Discovery</CardTitle>
+                  <CardDescription>
+                    Search across all interviews, media, and tools with advanced filtering and topic rollups
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
+                      <span>Unified search across all content</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
+                      <span>Advanced filtering by topic & type</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-[#06D6A0]" aria-hidden="true" />
+                      <span>Topic rollup views</span>
                     </li>
                   </ul>
                 </CardContent>
