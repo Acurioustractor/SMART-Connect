@@ -116,20 +116,22 @@ async function addVideosToDatabase(videos: YouTubeVideo[]) {
         .from('media_items')
         .insert({
           title: video.title,
-          description: video.description,
+          description: video.description || '',
           source_url: video.url,
           media_type: 'video',
-          source_platform: 'youtube',
+          outlet_host: 'SMART Recovery Australia - YouTube',
           thumbnail_url: video.thumbnailUrl,
-          published_at: uploadDate,
+          publish_date: uploadDate,
+          publish_date_approx: false,
           download_status: 'pending',
           transcription_status: 'pending',
           embedding_status: 'pending',
-          metadata: {
-            youtube_id: video.id,
-            view_count: video.viewCount,
-            duration_string: video.duration,
-          },
+          why_matters: 'Official SMART Recovery Australia content',
+          featured_people: [],
+          topics: [],
+          tags: ['youtube', 'official'],
+          view_count: video.viewCount || 0,
+          play_count: 0,
         });
 
       if (error) {
