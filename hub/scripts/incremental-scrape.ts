@@ -87,6 +87,7 @@ async function discoverAllUrls(): Promise<string[]> {
   // Monitor crawl progress
   let isComplete = false
   let attempts = 0
+  let finalStatus: any = null
   const maxAttempts = 60 // 10 minutes
 
   while (!isComplete && attempts < maxAttempts) {
@@ -105,6 +106,7 @@ async function discoverAllUrls(): Promise<string[]> {
 
     if (status.status === 'completed') {
       isComplete = true
+      finalStatus = status // Save the final status with data
       console.log(chalk.green(`\n✅ Discovery crawl complete!`))
       console.log(chalk.gray(`   Pages found: ${status.completed || 'unknown'}\n`))
     } else if (status.status === 'failed') {
@@ -120,23 +122,12 @@ async function discoverAllUrls(): Promise<string[]> {
     throw new Error('Discovery crawl timed out')
   }
 
-  // Get the results to extract URLs
-  const resultsResponse = await fetch(`${BASE_URL}/api/content/scrape-full`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      action: 'get_results',
-      jobId: startResult.jobId
-    })
-  })
-
-  const results = await resultsResponse.json()
-
-  if (!results.success || !results.data) {
+  // Extract URLs from the status data (already included in check_status response)
+  if (!finalStatus || !finalStatus.data) {
     throw new Error('Failed to get crawl results')
   }
 
-  const urls = results.data.map((page: any) =>
+  const urls = finalStatus.data.map((page: any) =>
     page.metadata?.sourceURL || page.url
   ).filter(Boolean)
 
