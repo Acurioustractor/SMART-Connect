@@ -358,21 +358,18 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
     // Log the full response for debugging
     console.log('Firecrawl response:', JSON.stringify(scrapeResult, null, 2).substring(0, 500))
 
-    // v2 API structure: { success: boolean, data: { markdown, html, metadata } }
-    if (!scrapeResult.success) {
-      throw new Error(`Firecrawl scrape failed: ${scrapeResult.error || 'Unknown error'}`)
-    }
-
-    const data = scrapeResult.data
+    // v2 API structure is flat: { markdown, html, metadata }
+    // For PDFs, markdown is often empty, but html has content
+    const data = scrapeResult
 
     // Log the response structure for debugging
-    console.log('Has data property:', !!scrapeResult.data)
     console.log('Has markdown:', !!(data?.markdown))
     console.log('Has html:', !!(data?.html))
-    console.log('Has content:', !!(data?.content))
+    console.log('Markdown length:', data?.markdown?.length || 0)
+    console.log('HTML length:', data?.html?.length || 0)
 
-    // Check multiple possible content fields
-    const content = data?.markdown || data?.html || data?.content || ''
+    // For PDFs, prefer html since markdown is often empty
+    const content = data?.html || data?.markdown || data?.content || ''
 
     if (!content || content.trim().length === 0) {
       console.error('Empty content from Firecrawl for URL:', url)
