@@ -147,12 +147,47 @@ async function downloadFromYouTube(
   try {
     const { stdout, stderr } = await execAsync(cmd);
 
+    // Log any warnings or errors from yt-dlp
+    if (stderr) {
+      console.log(`[YouTube] stderr: ${stderr.slice(0, 500)}`);
+    }
+
     // Parse JSON output from yt-dlp
     const metadata = JSON.parse(stdout);
-    const filePath = metadata._filename || metadata.requested_downloads?.[0]?.filename;
+    let filePath = metadata._filename || metadata.requested_downloads?.[0]?.filename;
 
     if (!filePath) {
-      throw new Error('Could not determine output file path');
+      throw new Error('Could not determine output file path from yt-dlp metadata');
+    }
+
+    // Check if file exists at the reported path
+    let fileExists = false;
+    try {
+      await fs.stat(filePath);
+      fileExists = true;
+    } catch {
+      console.log(`[YouTube] File not found at expected path: ${filePath}`);
+
+      // Try to find the file with the same ID but different extension
+      const parsedPath = path.parse(filePath);
+      const fileId = parsedPath.name;
+
+      console.log(`[YouTube] Searching for files matching pattern: ${fileId}.*`);
+
+      const files = await fs.readdir(outputDir);
+      const matchingFiles = files.filter(f => f.startsWith(fileId + '.'));
+
+      if (matchingFiles.length > 0) {
+        filePath = path.join(outputDir, matchingFiles[0]);
+        console.log(`[YouTube] Found file at: ${filePath}`);
+        fileExists = true;
+      }
+    }
+
+    if (!fileExists) {
+      const files = await fs.readdir(outputDir);
+      console.error(`[YouTube] Available files in ${outputDir}:`, files);
+      throw new Error(`Downloaded file not found. Expected: ${filePath}`);
     }
 
     const stats = await fs.stat(filePath);
@@ -268,8 +303,60 @@ async function downloadFromPodbean(
   url: string,
   options: MediaDownloadOptions
 ): Promise<MediaDownloadResult> {
-  // Podbean can be handled by yt-dlp or by extracting direct audio URL
-  return await downloadWithYtDlp(url, options);
+  // Try to extract direct audio URL from Podbean page first
+  // This avoids the recursion issues with yt-dlp's generic extractor
+  try {
+    console.log('[Podbean] Attempting to extract direct audio URL...');
+    const response = await fetch(url);
+    const html = await response.text();
+
+    // Podbean typically has the audio URL in a data attribute or in JSON
+    // Look for patterns like: data-url="..." or src="..." in audio tags
+    const audioUrlPatterns = [
+      /"audioUrl":"([^"]+)"/i,
+      /data-url="([^"]+\.mp3[^"]*)"/i,
+      /<audio[^>]+src="([^"]+)"/i,
+      /"logo_url":"[^"]+","media":"([^"]+)"/i,
+      /"media_url":"([^"]+)"/i,
+    ];
+
+    let audioUrl: string | null = null;
+    for (const pattern of audioUrlPatterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        audioUrl = match[1];
+        // Decode if it's URL encoded
+        audioUrl = audioUrl.replace(/\\u002F/g, '/').replace(/\\/g, '');
+        console.log(`[Podbean] Found audio URL: ${audioUrl.slice(0, 100)}...`);
+        break;
+      }
+    }
+
+    if (audioUrl) {
+      // Download directly
+      return await downloadGeneric(audioUrl, options);
+    }
+
+    console.log('[Podbean] Could not extract direct URL, falling back to yt-dlp...');
+  } catch (error) {
+    console.log('[Podbean] Direct extraction failed:', error);
+    console.log('[Podbean] Falling back to yt-dlp...');
+  }
+
+  // Fallback to yt-dlp
+  try {
+    return await downloadWithYtDlp(url, options);
+  } catch (error: any) {
+    // Check if it's the recursion error
+    if (error.message?.includes('RecursionError') || error.message?.includes('maximum recursion')) {
+      throw new Error(
+        'Podbean download failed due to yt-dlp recursion error. ' +
+        'This URL may require manual download or updating yt-dlp. ' +
+        'Please run: bash hub/scripts/update-yt-dlp.sh'
+      );
+    }
+    throw error;
+  }
 }
 
 /**
@@ -331,12 +418,52 @@ async function downloadWithYtDlp(
   console.log(`[yt-dlp] Running: ${cmd}`);
 
   try {
-    const { stdout } = await execAsync(cmd);
+    const { stdout, stderr } = await execAsync(cmd);
+
+    // Log any warnings or errors from yt-dlp
+    if (stderr) {
+      console.log(`[yt-dlp] stderr: ${stderr.slice(0, 500)}`);
+    }
+
     const metadata = JSON.parse(stdout);
-    const filePath = metadata._filename || metadata.requested_downloads?.[0]?.filename;
+    let filePath = metadata._filename || metadata.requested_downloads?.[0]?.filename;
 
     if (!filePath) {
-      throw new Error('Could not determine output file path');
+      throw new Error('Could not determine output file path from yt-dlp metadata');
+    }
+
+    // Check if file exists at the reported path
+    let fileExists = false;
+    try {
+      await fs.stat(filePath);
+      fileExists = true;
+    } catch {
+      console.log(`[yt-dlp] File not found at expected path: ${filePath}`);
+
+      // Try to find the file with the same ID but different extension
+      // Extract the ID from the expected path
+      const parsedPath = path.parse(filePath);
+      const fileId = parsedPath.name; // This is the filename without extension
+
+      console.log(`[yt-dlp] Searching for files matching pattern: ${fileId}.*`);
+
+      // List all files in the output directory
+      const files = await fs.readdir(outputDir);
+      const matchingFiles = files.filter(f => f.startsWith(fileId + '.'));
+
+      if (matchingFiles.length > 0) {
+        // Use the first matching file (should only be one)
+        filePath = path.join(outputDir, matchingFiles[0]);
+        console.log(`[yt-dlp] Found file at: ${filePath}`);
+        fileExists = true;
+      }
+    }
+
+    if (!fileExists) {
+      // List directory contents for debugging
+      const files = await fs.readdir(outputDir);
+      console.error(`[yt-dlp] Available files in ${outputDir}:`, files);
+      throw new Error(`Downloaded file not found. Expected: ${filePath}`);
     }
 
     const stats = await fs.stat(filePath);

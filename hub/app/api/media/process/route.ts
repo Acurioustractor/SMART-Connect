@@ -21,11 +21,23 @@ const openai = new OpenAI({
 });
 
 /**
+ * Helper function to log with timestamp
+ */
+function logWithTime(message: string, ...args: any[]) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${message}`, ...args);
+}
+
+/**
  * POST /api/media/process
  * Process a media item: download, transcribe, and create embeddings
  */
 export async function POST(request: NextRequest) {
+  const requestStartTime = Date.now();
+
   try {
+    logWithTime('[Media Process] Request received');
+
     const body = await request.json();
     const { mediaItemId, steps } = body;
 
@@ -36,6 +48,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    logWithTime('[Media Process] Fetching media item from database...');
+    const dbStartTime = Date.now();
+
     // Get media item
     const { data: mediaItem, error: fetchError } = await supabase
       .from('media_items')
@@ -43,7 +58,10 @@ export async function POST(request: NextRequest) {
       .eq('id', mediaItemId)
       .single();
 
+    logWithTime(`[Media Process] Database fetch completed in ${Date.now() - dbStartTime}ms`);
+
     if (fetchError || !mediaItem) {
+      logWithTime('[Media Process] Media item not found');
       return NextResponse.json(
         { error: 'Media item not found' },
         { status: 404 }
@@ -53,8 +71,10 @@ export async function POST(request: NextRequest) {
     const processSteps = steps || ['download', 'transcribe', 'embed'];
     const results: any = {};
 
-    console.log(`[Media Process] Starting processing for: ${mediaItem.title}`);
-    console.log(`[Media Process] Steps: ${processSteps.join(' → ')}`);
+    logWithTime(`[Media Process] Starting processing for: ${mediaItem.title}`);
+    logWithTime(`[Media Process] URL: ${mediaItem.source_url}`);
+    logWithTime(`[Media Process] Type: ${mediaItem.media_type}`);
+    logWithTime(`[Media Process] Steps: ${processSteps.join(' → ')}`);
 
     // Create processing job
     const { data: job } = await supabase
@@ -71,24 +91,34 @@ export async function POST(request: NextRequest) {
 
     // STEP 1: Download media
     if (processSteps.includes('download') && mediaItem.download_status !== 'completed') {
-      console.log('[Media Process] Step 1: Downloading media...');
+      logWithTime('[Media Process] Step 1: Downloading media...');
+      const downloadStartTime = Date.now();
 
       try {
+        logWithTime('[Media Process] Updating download status to "downloading"...');
         await supabase
           .from('media_items')
           .update({ download_status: 'downloading' })
           .eq('id', mediaItemId);
 
+        logWithTime('[Media Process] Starting download from source...');
         const downloadResult = await downloadMedia(mediaItem.source_url, {
           outputDir: '/tmp/media-downloads',
           audioOnly: mediaItem.media_type === 'audio' || mediaItem.media_type === 'podcast',
         });
 
+        logWithTime(`[Media Process] Download completed in ${Date.now() - downloadStartTime}ms`);
+
         if (downloadResult.success && downloadResult.filePath) {
+          logWithTime('[Media Process] Preparing to upload to Supabase Storage...');
+          const uploadStartTime = Date.now();
+
           // Upload to Supabase Storage
           const fileName = `${mediaItemId}${path.extname(downloadResult.filePath)}`;
+          logWithTime(`[Media Process] Reading file: ${downloadResult.filePath} (${downloadResult.fileSize} bytes)`);
           const fileContent = await fs.readFile(downloadResult.filePath);
 
+          logWithTime(`[Media Process] Uploading ${fileName} to storage...`);
           const { error: uploadError } = await supabase.storage
             .from('media-files')
             .upload(fileName, fileContent, {
@@ -96,10 +126,13 @@ export async function POST(request: NextRequest) {
               upsert: true,
             });
 
+          logWithTime(`[Media Process] Upload completed in ${Date.now() - uploadStartTime}ms`);
+
           if (uploadError) {
             throw new Error(`Storage upload failed: ${uploadError.message}`);
           }
 
+          logWithTime('[Media Process] Updating media item record...');
           // Update media item
           await supabase
             .from('media_items')
@@ -123,13 +156,15 @@ export async function POST(request: NextRequest) {
             duration: downloadResult.duration,
           };
 
+          logWithTime('[Media Process] Cleaning up temp file...');
           // Clean up temp file
           await fs.unlink(downloadResult.filePath).catch(() => {});
         } else {
           throw new Error(downloadResult.error || 'Download failed');
         }
       } catch (error: any) {
-        console.error('[Media Process] Download error:', error);
+        logWithTime('[Media Process] Download error:', error.message);
+        console.error('[Media Process] Download error stack:', error.stack);
 
         await supabase
           .from('media_items')
@@ -154,6 +189,7 @@ export async function POST(request: NextRequest) {
           })
           .eq('id', job.id);
 
+        logWithTime(`[Media Process] Request failed after ${Date.now() - requestStartTime}ms`);
         return NextResponse.json({
           success: false,
           error: `Download failed: ${error.message}`,
@@ -171,7 +207,8 @@ export async function POST(request: NextRequest) {
 
     // STEP 2: Transcribe audio
     if (processSteps.includes('transcribe') && updatedMediaItem.transcription_status !== 'completed') {
-      console.log('[Media Process] Step 2: Transcribing audio...');
+      logWithTime('[Media Process] Step 2: Transcribing audio...');
+      const transcribeStartTime = Date.now();
 
       try {
         await supabase
@@ -199,13 +236,17 @@ export async function POST(request: NextRequest) {
         await fs.writeFile(tempPath, buffer);
 
         // Transcribe
+        logWithTime('[Media Process] Starting transcription with Whisper API...');
         const transcriptionResult = await transcribeAudio(tempPath, {
           language: 'en',
           responseFormat: 'verbose_json',
           timestampGranularities: ['segment'],
         });
 
+        logWithTime(`[Media Process] Transcription completed in ${Date.now() - transcribeStartTime}ms`);
+
         // Clean up temp file
+        logWithTime('[Media Process] Cleaning up transcription temp file...');
         await fs.unlink(tempPath).catch(() => {});
 
         if (transcriptionResult.success && transcriptionResult.text) {
@@ -256,7 +297,8 @@ export async function POST(request: NextRequest) {
           throw new Error(transcriptionResult.error || 'Transcription failed');
         }
       } catch (error: any) {
-        console.error('[Media Process] Transcription error:', error);
+        logWithTime('[Media Process] Transcription error:', error.message);
+        console.error('[Media Process] Transcription error stack:', error.stack);
 
         await supabase
           .from('media_items')
@@ -275,7 +317,8 @@ export async function POST(request: NextRequest) {
 
     // STEP 3: Create embeddings
     if (processSteps.includes('embed') && updatedMediaItem.embedding_status !== 'completed') {
-      console.log('[Media Process] Step 3: Creating embeddings...');
+      logWithTime('[Media Process] Step 3: Creating embeddings...');
+      const embeddingStartTime = Date.now();
 
       try {
         await supabase
@@ -301,10 +344,11 @@ export async function POST(request: NextRequest) {
           1000 // max chunk size in characters
         );
 
-        console.log(`[Media Process] Creating ${chunks.length} embeddings...`);
+        logWithTime(`[Media Process] Creating ${chunks.length} embeddings...`);
 
         // Create embeddings for each chunk
         const embeddings = [];
+        const embeddingAPIStartTime = Date.now();
         for (let i = 0; i < chunks.length; i++) {
           const chunk = chunks[i];
           try {
@@ -326,31 +370,32 @@ export async function POST(request: NextRequest) {
 
             // Log progress every 10 chunks
             if ((i + 1) % 10 === 0 || i === chunks.length - 1) {
-              console.log(`[Media Process] Embeddings progress: ${i + 1}/${chunks.length}`);
+              logWithTime(`[Media Process] Embeddings progress: ${i + 1}/${chunks.length}`);
             }
 
             // Small delay to avoid rate limiting
             await new Promise(resolve => setTimeout(resolve, 100));
           } catch (embeddingError: any) {
-            console.error(`[Media Process] Failed to create embedding for chunk ${i}:`, embeddingError.message);
+            logWithTime(`[Media Process] Failed to create embedding for chunk ${i}:`, embeddingError.message);
             throw new Error(`Embedding creation failed at chunk ${i + 1}/${chunks.length}: ${embeddingError.message}`);
           }
         }
 
-        console.log(`[Media Process] All ${embeddings.length} embeddings created successfully`);
+        logWithTime(`[Media Process] All ${embeddings.length} embeddings created in ${Date.now() - embeddingAPIStartTime}ms`);
 
         // Insert embeddings
-        console.log(`[Media Process] Inserting ${embeddings.length} embeddings into database...`);
+        logWithTime(`[Media Process] Inserting ${embeddings.length} embeddings into database...`);
+        const dbInsertStartTime = Date.now();
         const { error: embeddingError } = await supabase
           .from('media_embeddings')
           .insert(embeddings);
 
         if (embeddingError) {
-          console.error('[Media Process] Database insert error:', embeddingError);
+          logWithTime('[Media Process] Database insert error:', embeddingError.message);
           throw new Error(`Failed to save embeddings: ${embeddingError.message}`);
         }
 
-        console.log(`[Media Process] Embeddings saved to database successfully`);
+        logWithTime(`[Media Process] Embeddings saved to database in ${Date.now() - dbInsertStartTime}ms`);
 
 
         // Update media item
@@ -367,7 +412,8 @@ export async function POST(request: NextRequest) {
           embeddingCount: embeddings.length,
         };
       } catch (error: any) {
-        console.error('[Media Process] Embedding error:', error);
+        logWithTime('[Media Process] Embedding error:', error.message);
+        console.error('[Media Process] Embedding error stack:', error.stack);
 
         await supabase
           .from('media_items')
@@ -384,6 +430,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Update job as completed
+    logWithTime('[Media Process] Updating job status to completed...');
     await supabase
       .from('media_processing_jobs')
       .update({
@@ -395,17 +442,21 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', job.id);
 
-    console.log('[Media Process] Processing complete!');
+    const totalTime = Date.now() - requestStartTime;
+    logWithTime(`[Media Process] Processing complete! Total time: ${totalTime}ms (${(totalTime / 1000).toFixed(1)}s)`);
 
     const responseData = {
       success: true,
       results,
       message: 'Media processing completed',
+      processingTimeMs: totalTime,
     };
 
-    console.log('[Media Process] Sending response...');
+    logWithTime('[Media Process] Sending response...');
     return NextResponse.json(responseData);
   } catch (error: any) {
+    const totalTime = Date.now() - requestStartTime;
+    logWithTime(`[Media Process] Unhandled error after ${totalTime}ms:`, error.message);
     console.error('[Media Process] Error:', error);
     console.error('[Media Process] Error stack:', error.stack);
 
@@ -413,7 +464,8 @@ export async function POST(request: NextRequest) {
       {
         success: false,
         error: error.message || 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        processingTimeMs: totalTime,
       },
       { status: 500 }
     );
