@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, User, Calendar, Mail, FileText, ChevronDown, ChevronUp, Loader2, Sparkles, CheckCircle2, AlertCircle, BarChart3, BookOpen, Lightbulb, Users, Target, Heart } from 'lucide-react'
+import { Search, User, Calendar, Mail, FileText, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle, BarChart3, BookOpen, Lightbulb, Users, Target, Heart } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Container } from '@/components/ui/container'
 import { Input } from '@/components/ui/input'
@@ -72,8 +72,6 @@ export default function InterviewsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [expandedContent, setExpandedContent] = useState<string>('')
   const [loadingContent, setLoadingContent] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
-  const [analysisProgress, setAnalysisProgress] = useState<string>('')
 
   useEffect(() => {
     fetchInterviews()
@@ -99,46 +97,6 @@ export default function InterviewsPage() {
       console.error('Error fetching interviews:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const analyzeAllInterviews = async () => {
-    if (!confirm('This will analyze all interviews that haven\'t been analyzed yet using GPT-4. This may take several minutes and will incur API costs. Continue?')) {
-      return
-    }
-
-    setAnalyzing(true)
-    setAnalysisProgress('Starting analysis...')
-
-    try {
-      const response = await fetch('/api/interviews/analyze-all', {
-        method: 'POST'
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        setAnalysisProgress(`Analysis complete! Analyzed: ${result.analyzed}, Skipped: ${result.skipped}, Failed: ${result.failed}`)
-        // Refresh interviews to show new analysis
-        await fetchInterviews()
-        setTimeout(() => {
-          setAnalyzing(false)
-          setAnalysisProgress('')
-        }, 3000)
-      } else {
-        setAnalysisProgress('Analysis failed: ' + result.error)
-        setTimeout(() => {
-          setAnalyzing(false)
-          setAnalysisProgress('')
-        }, 5000)
-      }
-    } catch (error) {
-      console.error('Error analyzing interviews:', error)
-      setAnalysisProgress('Analysis failed')
-      setTimeout(() => {
-        setAnalyzing(false)
-        setAnalysisProgress('')
-      }, 5000)
     }
   }
 
@@ -260,48 +218,7 @@ export default function InterviewsPage() {
                 Browse through {interviews.length} interviews with SMART Recovery facilitators
               </p>
             </div>
-            <div className="flex gap-3">
-              <Button
-                onClick={analyzeAllInterviews}
-                disabled={analyzing || pendingCount === 0}
-                className="flex items-center gap-2 bg-[#06D6A0] hover:bg-[#05C090] text-white"
-                size="lg"
-              >
-                {analyzing ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-5 w-5" />
-                    Analyze All ({pendingCount})
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={() => window.location.href = '/interviews/upload'}
-                variant="outline"
-                className="flex items-center gap-2"
-                size="lg"
-              >
-                <FileText className="h-5 w-5" />
-                Add Interview
-              </Button>
-            </div>
           </div>
-
-          {/* Analysis Progress */}
-          {analysisProgress && (
-            <Card className="mb-6 bg-blue-50 border-blue-200">
-              <CardContent className="py-4">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                  <p className="text-sm text-blue-900 font-medium">{analysisProgress}</p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -511,7 +428,9 @@ export default function InterviewsPage() {
                         {/* One-Line Takeaway - Featured at top */}
                         <div className="bg-gradient-to-br from-[#003B5C] to-[#0066A1] p-6 rounded-lg shadow-lg">
                           <div className="flex items-start gap-3">
-                            <Sparkles className="h-6 w-6 text-[#FFD23F] flex-shrink-0 mt-1" />
+                            <div className="p-2 bg-white/20 rounded-lg">
+                              <FileText className="h-6 w-6 text-white flex-shrink-0" />
+                            </div>
                             <div>
                               <h3 className="text-sm font-semibold text-[#00A5E0] mb-2">Key Takeaway</h3>
                               <p className="text-lg text-white leading-relaxed font-medium">{interview.analysis.oneLineTakeaway}</p>
