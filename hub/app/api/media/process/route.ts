@@ -192,7 +192,9 @@ export async function POST(request: NextRequest) {
           throw new Error('Failed to download file from storage');
         }
 
-        const tempPath = `/tmp/${mediaItemId}.audio`;
+        // Preserve original file extension for Whisper API
+        const fileExtension = path.extname(updatedMediaItem.file_path) || '.mp3';
+        const tempPath = `/tmp/${mediaItemId}${fileExtension}`;
         const buffer = Buffer.from(await fileData.arrayBuffer());
         await fs.writeFile(tempPath, buffer);
 
