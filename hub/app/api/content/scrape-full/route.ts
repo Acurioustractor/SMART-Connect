@@ -375,6 +375,8 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
 
     // If content is empty and this is a PDF, try direct PDF text extraction
     const isPdf = url.toLowerCase().endsWith('.pdf')
+    let isImageBasedPDF = false
+
     if ((!content || content.trim().length === 0 || content === '<html><body><div></div></body></html>') && isPdf) {
       console.log('Firecrawl returned empty content for PDF, attempting direct extraction...')
 
@@ -392,11 +394,32 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
         // Check if PDF extracted but has no text (likely image-based)
         if (!content || content.trim().length === 0) {
           console.warn(`⚠️ PDF extracted successfully but contains no text (likely image-based): ${url}`)
-          throw new Error('PDF contains no extractable text - may be an image-based/scanned document that requires OCR')
+          isImageBasedPDF = true
+
+          // Create placeholder content for image-based PDFs
+          const filename = url.split('/').pop() || 'document.pdf'
+          content = `[Image-based PDF - OCR required]\n\nFilename: ${filename}\nPages: ${extractedPDFData.numPages}\nURL: ${url}\n\nThis PDF appears to be image-based or scanned and requires OCR (Optical Character Recognition) to extract text content.`
+
+          if (!data.metadata) data.metadata = {}
+          data.metadata.requiresOCR = true
+          data.metadata.isImageBased = true
         }
       } catch (pdfError: any) {
         console.error('Failed to extract PDF text:', pdfError.message)
-        throw new Error(`Failed to extract PDF content: ${pdfError.message}`)
+
+        // If this is a download error (404, network), throw it
+        if (pdfError.message.includes('404') || pdfError.message.includes('download')) {
+          throw new Error(`Failed to download PDF: ${pdfError.message}`)
+        }
+
+        // For other PDF errors, still save with error note
+        isImageBasedPDF = true
+        const filename = url.split('/').pop() || 'document.pdf'
+        content = `[PDF Processing Error]\n\nFilename: ${filename}\nURL: ${url}\nError: ${pdfError.message}\n\nThis PDF could not be processed. It may be corrupted, password-protected, or require manual review.`
+
+        if (!data.metadata) data.metadata = {}
+        data.metadata.processingError = pdfError.message
+        data.metadata.requiresManualReview = true
       }
     }
 

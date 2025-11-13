@@ -91,8 +91,18 @@ async function scanExistingContentForPDFs(): Promise<Map<string, PDFLink>> {
         // Extract PDF URL from match
         let pdfUrl = match[1] || match[2] || match[0]
 
-        // Clean up URL
+        // Clean up URL - remove quotes, trim whitespace
         pdfUrl = pdfUrl.trim().replace(/^['"]|['"]$/g, '')
+
+        // Remove malformed markdown syntax (e.g., "file.pdf](https://...")
+        // This happens when markdown is improperly parsed
+        pdfUrl = pdfUrl.replace(/\]\(https?:\/\/[^)]+$/, '')
+
+        // Also clean up if there's a markdown link at the end
+        const pdfMatch = pdfUrl.match(/^(https?:\/\/[^\s\]]+\.pdf)/i)
+        if (pdfMatch) {
+          pdfUrl = pdfMatch[1]
+        }
 
         // Make relative URLs absolute
         if (pdfUrl.startsWith('/')) {
@@ -103,6 +113,14 @@ async function scanExistingContentForPDFs(): Promise<Map<string, PDFLink>> {
 
         // Ensure it's actually a PDF URL
         if (!pdfUrl.toLowerCase().includes('.pdf')) {
+          continue
+        }
+
+        // Final validation - must be a valid URL
+        try {
+          new URL(pdfUrl)
+        } catch {
+          console.log(chalk.yellow(`   ⚠️  Skipping malformed URL: ${pdfUrl.slice(0, 80)}`))
           continue
         }
 
