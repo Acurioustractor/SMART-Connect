@@ -19,6 +19,11 @@
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
 import chalk from 'chalk'
+import * as dotenv from 'dotenv'
+import path from 'path'
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.join(__dirname, '..', '.env.local') })
 
 // Initialize clients
 const supabase = createClient(
