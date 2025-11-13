@@ -195,11 +195,11 @@ async function checkCrawlStatus(jobId: string) {
   }
 
   try {
-    // Check status with Firecrawl (with 60 second timeout)
+    // Check status with Firecrawl (with 120 second timeout)
     const status: any = await withTimeout(
       firecrawl.getCrawlStatus(job.firecrawl_job_id),
-      60000,
-      'Firecrawl getCrawlStatus timed out after 60 seconds'
+      120000,
+      'Firecrawl getCrawlStatus timed out after 120 seconds'
     )
 
     console.log('Crawl status:', status)
@@ -351,11 +351,11 @@ async function processAndStoreCrawlResults(jobId: string) {
   }
 
   try {
-    // Get crawl results from Firecrawl (with 60 second timeout)
+    // Get crawl results from Firecrawl (with 120 second timeout)
     const status: any = await withTimeout(
       firecrawl.getCrawlStatus(job.firecrawl_job_id!),
-      60000,
-      'Firecrawl getCrawlStatus timed out after 60 seconds'
+      120000,
+      'Firecrawl getCrawlStatus timed out after 120 seconds'
     )
     const pages = status.data || []
 
