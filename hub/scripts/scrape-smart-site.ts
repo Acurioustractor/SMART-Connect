@@ -166,21 +166,37 @@ async function main() {
  */
 async function startCrawl(): Promise<JobStatus> {
   try {
-    const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'start_crawl',
-        url: TARGET_SITE
+    // Use a longer timeout for starting the crawl (5 minutes)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minutes
+
+    try {
+      const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'start_crawl',
+          url: TARGET_SITE
+        }),
+        signal: controller.signal
       })
-    })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.details || error.error || 'Failed to start crawl')
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.details || error.error || 'Failed to start crawl')
+      }
+
+      return await response.json()
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId)
+
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timed out after 5 minutes. The server may be overloaded or the API key may be invalid.')
+      }
+      throw fetchError
     }
-
-    return await response.json()
   } catch (error: any) {
     return {
       success: false,
@@ -198,14 +214,19 @@ async function monitorCrawl(jobId: string): Promise<JobStatus> {
 
   while (attempts < maxAttempts) {
     try {
+      // Use a 30-second timeout for status checks
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
+
       const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'check_status',
           jobId
-        })
-      })
+        }),
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeoutId))
 
       if (!response.ok) {
         const error = await response.json()
@@ -250,14 +271,19 @@ async function monitorCrawl(jobId: string): Promise<JobStatus> {
  */
 async function startProcessing(jobId: string): Promise<JobStatus> {
   try {
+    // Use a 2-minute timeout for starting processing
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minutes
+
     const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         action: 'process_results',
         jobId
-      })
-    })
+      }),
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeoutId))
 
     if (!response.ok) {
       const error = await response.json()
@@ -282,14 +308,19 @@ async function monitorProcessing(jobId: string): Promise<ProcessResults> {
 
   while (attempts < maxAttempts) {
     try {
+      // Use a 30-second timeout for processing status checks
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
+
       const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'check_processing',
           jobId
-        })
-      })
+        }),
+        signal: controller.signal
+      }).finally(() => clearTimeout(timeoutId))
 
       if (!response.ok) {
         const error = await response.json()
