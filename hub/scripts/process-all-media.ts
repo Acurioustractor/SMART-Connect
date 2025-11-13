@@ -37,6 +37,10 @@ async function processMediaItem(mediaItem: any, baseUrl: string): Promise<{
     console.log(`   URL: ${mediaItem.source_url}`);
     console.log(`   Type: ${mediaItem.media_type}`);
 
+    // Create AbortController with 30-minute timeout for large audio files
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30 * 60 * 1000); // 30 minutes
+
     const response = await fetch(`${baseUrl}/api/media/process`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,7 +48,8 @@ async function processMediaItem(mediaItem: any, baseUrl: string): Promise<{
         mediaItemId: mediaItem.id,
         steps: ['download', 'transcribe', 'embed'],
       }),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
     const result = await response.json();
 
@@ -65,6 +70,12 @@ async function processMediaItem(mediaItem: any, baseUrl: string): Promise<{
       return { success: false, error: result.error };
     }
   } catch (error: any) {
+    // Provide clearer error message for timeout/abort errors
+    if (error.name === 'AbortError') {
+      const errorMsg = 'Request timeout (exceeded 30 minutes) - file may be too large';
+      console.log(`   ❌ Error: ${errorMsg}`);
+      return { success: false, error: errorMsg };
+    }
     console.log(`   ❌ Error: ${error.message}`);
     return { success: false, error: error.message };
   }
