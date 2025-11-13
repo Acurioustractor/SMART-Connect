@@ -142,6 +142,20 @@ export default function MediaDetailPage() {
     }
   };
 
+  const getYouTubeId = (url: string): string | null => {
+    const patterns = [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/,
+      /youtube\.com\/embed\/([^&\n?#]+)/,
+    ];
+
+    for (const pattern of patterns) {
+      const match = url.match(pattern);
+      if (match) return match[1];
+    }
+
+    return null;
+  };
+
   if (loading) {
     return (
       <Container className="py-8">
@@ -182,6 +196,23 @@ export default function MediaDetailPage() {
           </Button>
         </Link>
       </div>
+
+      {/* YouTube Embed */}
+      {mediaItem.source_url.includes('youtube.com') && (
+        <Card className="mb-6">
+          <CardContent className="p-0">
+            <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+              <iframe
+                className="absolute top-0 left-0 w-full h-full rounded-lg"
+                src={`https://www.youtube.com/embed/${getYouTubeId(mediaItem.source_url)}`}
+                title={mediaItem.title}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Media Details Card */}
       <Card className="mb-6">

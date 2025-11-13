@@ -260,14 +260,31 @@ export default function MediaPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {mediaItems.map((item) => (
-            <Card key={item.id} className="hover:shadow-lg transition-shadow">
+            <Card key={item.id} className="hover:shadow-lg transition-shadow overflow-hidden">
+              {/* Thumbnail */}
+              {item.thumbnail_url && (
+                <div className="relative w-full h-48 bg-gray-100">
+                  <img
+                    src={item.thumbnail_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  <div className="absolute top-2 right-2">
+                    {getStatusBadge(item.transcription_status)}
+                  </div>
+                </div>
+              )}
+
               <CardHeader>
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {getMediaIcon(item.media_type)}
                     <span className="text-xs text-gray-500 uppercase">{item.media_type}</span>
                   </div>
-                  {getStatusBadge(item.transcription_status)}
+                  {!item.thumbnail_url && getStatusBadge(item.transcription_status)}
                 </div>
                 <CardTitle className="text-lg line-clamp-2">{item.title}</CardTitle>
                 <CardDescription className="line-clamp-2">{item.outlet_host}</CardDescription>
