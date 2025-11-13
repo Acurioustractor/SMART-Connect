@@ -90,7 +90,7 @@ async function withRetry<T>(
 
 export async function POST(req: Request) {
   try {
-    const { action, url, jobId } = await req.json()
+    const { action, url, jobId, parentUrl } = await req.json()
 
     switch (action) {
       case 'start_crawl':
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
         return await checkProcessingStatus(jobId)
 
       case 'scrape_single':
-        return await scrapeSingleUrl(req)
+        return await scrapeSingleUrl(url, parentUrl)
 
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -330,12 +330,10 @@ async function startProcessing(jobId: string) {
 /**
  * Scrape a single URL and store it
  */
-async function scrapeSingleUrl(req: Request) {
+async function scrapeSingleUrl(url: string, parentUrl?: string) {
   const firecrawl = getFirecrawl()
   const supabase = getSupabase()
   const openai = getOpenAI()
-
-  const { url, parentUrl } = await req.json()
 
   if (!url) {
     return NextResponse.json({ error: 'URL is required' }, { status: 400 })
