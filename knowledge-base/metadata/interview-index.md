@@ -50,15 +50,31 @@ Interviews are now tagged with one of two types for easier filtering and analysi
 
 Interviews are tracked by completion status to identify which have full transcripts:
 
-### Transcript Complete (12)
-**Status:** "Interview complete" or "Interview locked"
+### Interview Complete (8)
+**Status:** "Interview complete"
 **Characteristics:** Full interview transcripts available for analysis
+- Alison Beck
+- Ambika Scott Jodrell
+- Danielle Caruana
+- Louise Kelly
+- Mark Powell, WRAD
+- Mitch Robinson
+- Nigel Harpley
+- Shaun Fisher
 
-### No Transcript (3)
-**Status:** "Contacted" or "Not started"
+### Interview Locked (4)
+**Status:** "Interview locked"
+**Characteristics:** Interview completed and transcript locked for final review
+- Brad Gunders
+- Diego Gonzalez
+- Jonathan Cornelius
+- Sonia Butler
+
+### Contacted (2)
+**Status:** "Contacted"
 **Characteristics:** Interview scheduled or in progress, transcript not yet available
-- Nicole Dickenson (Contacted)
-- Vic Manning (Contacted)
+- Nicole Dickenson
+- Vic Manning
 
 ---
 
