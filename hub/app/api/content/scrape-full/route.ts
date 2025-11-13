@@ -34,6 +34,32 @@ const getOpenAI = () => {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 }
 
+/**
+ * Timeout wrapper for Firecrawl API calls
+ */
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage: string
+): Promise<T> {
+  let timeoutHandle: NodeJS.Timeout
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(errorMessage))
+    }, timeoutMs)
+  })
+
+  try {
+    const result = await Promise.race([promise, timeoutPromise])
+    clearTimeout(timeoutHandle!)
+    return result
+  } catch (error) {
+    clearTimeout(timeoutHandle!)
+    throw error
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const { action, url, jobId } = await req.json()
@@ -97,16 +123,20 @@ async function startFullCrawl(targetUrl: string) {
   }
 
   try {
-    // Start Firecrawl crawl
-    const crawlResult: any = await firecrawl.startCrawl(targetUrl, {
-      limit: 1000,
-      scrapeOptions: {
-        formats: ['markdown', 'html'],
-        onlyMainContent: true,
-        includeTags: ['article', 'main', 'content', 'div'],
-        excludeTags: ['nav', 'footer', 'header', 'aside', 'script', 'style'],
-      }
-    })
+    // Start Firecrawl crawl (with 90 second timeout for initial request)
+    const crawlResult: any = await withTimeout(
+      firecrawl.startCrawl(targetUrl, {
+        limit: 1000,
+        scrapeOptions: {
+          formats: ['markdown', 'html'],
+          onlyMainContent: true,
+          includeTags: ['article', 'main', 'content', 'div'],
+          excludeTags: ['nav', 'footer', 'header', 'aside', 'script', 'style'],
+        }
+      }),
+      90000,
+      'Firecrawl startCrawl timed out after 90 seconds'
+    )
 
     console.log('Crawl started:', crawlResult)
 
@@ -165,8 +195,12 @@ async function checkCrawlStatus(jobId: string) {
   }
 
   try {
-    // Check status with Firecrawl
-    const status: any = await firecrawl.getCrawlStatus(job.firecrawl_job_id)
+    // Check status with Firecrawl (with 60 second timeout)
+    const status: any = await withTimeout(
+      firecrawl.getCrawlStatus(job.firecrawl_job_id),
+      60000,
+      'Firecrawl getCrawlStatus timed out after 60 seconds'
+    )
 
     console.log('Crawl status:', status)
 
@@ -317,8 +351,12 @@ async function processAndStoreCrawlResults(jobId: string) {
   }
 
   try {
-    // Get crawl results from Firecrawl
-    const status: any = await firecrawl.getCrawlStatus(job.firecrawl_job_id!)
+    // Get crawl results from Firecrawl (with 60 second timeout)
+    const status: any = await withTimeout(
+      firecrawl.getCrawlStatus(job.firecrawl_job_id!),
+      60000,
+      'Firecrawl getCrawlStatus timed out after 60 seconds'
+    )
     const pages = status.data || []
 
     console.log(`Processing ${pages.length} pages...`)

@@ -214,9 +214,9 @@ async function monitorCrawl(jobId: string): Promise<JobStatus> {
 
   while (attempts < maxAttempts) {
     try {
-      // Use a 30-second timeout for status checks
+      // Use a 90-second timeout for status checks (Firecrawl API can be slow during active crawling)
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90 seconds
 
       const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
         method: 'POST',
@@ -308,9 +308,9 @@ async function monitorProcessing(jobId: string): Promise<ProcessResults> {
 
   while (attempts < maxAttempts) {
     try {
-      // Use a 30-second timeout for processing status checks
+      // Use a 90-second timeout for processing status checks
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 30000) // 30 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 90000) // 90 seconds
 
       const response = await fetch(`${BASE_URL}/api/content/scrape-full`, {
         method: 'POST',
