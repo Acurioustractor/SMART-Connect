@@ -105,10 +105,17 @@ async function analyzeAllInterviews() {
     const interviewsPath = path.join(process.cwd(), '../knowledge-base/interviews')
     const analysisPath = path.join(process.cwd(), '../knowledge-base/interview-analysis')
 
+    console.log(`📂 Working directory: ${process.cwd()}`)
+    console.log(`📂 Interviews path: ${interviewsPath}`)
+    console.log(`📂 Analysis path: ${analysisPath}\n`)
+
     // Create analysis directory if it doesn't exist
     if (!fs.existsSync(analysisPath)) {
       console.log('📁 Creating analysis directory...')
       fs.mkdirSync(analysisPath, { recursive: true })
+      console.log(`✅ Created: ${analysisPath}\n`)
+    } else {
+      console.log(`✅ Analysis directory exists: ${analysisPath}\n`)
     }
 
     // Get all interview files
@@ -174,10 +181,17 @@ async function analyzeAllInterviews() {
         }
 
         // Save analysis
+        console.log(`💾 Saving to: ${analysisFile}`)
         fs.writeFileSync(analysisFile, JSON.stringify(analysis, null, 2))
 
-        console.log(`✅ Completed analysis for ${name}`)
-        results.analyzed++
+        // Verify file was written
+        if (fs.existsSync(analysisFile)) {
+          const fileSize = fs.statSync(analysisFile).size
+          console.log(`✅ Completed analysis for ${name} (${fileSize} bytes)`)
+          results.analyzed++
+        } else {
+          throw new Error('File was not saved successfully')
+        }
 
         // Add delay to avoid rate limits
         await new Promise(resolve => setTimeout(resolve, 1000))
@@ -193,6 +207,18 @@ async function analyzeAllInterviews() {
     console.log(`   ✅ Analyzed: ${results.analyzed}`)
     console.log(`   ⏭️  Skipped: ${results.skipped}`)
     console.log(`   ❌ Failed: ${results.failed}`)
+
+    // Verify and list all saved files
+    console.log('\n📋 Verifying saved files...')
+    const savedFiles = fs.readdirSync(analysisPath).filter(f => f.endsWith('.json'))
+    console.log(`📁 Found ${savedFiles.length} analysis files in: ${analysisPath}`)
+    if (savedFiles.length > 0) {
+      console.log('\nSaved files:')
+      savedFiles.forEach(file => {
+        const size = fs.statSync(path.join(analysisPath, file)).size
+        console.log(`  ✓ ${file} (${size} bytes)`)
+      })
+    }
 
   } catch (error: any) {
     console.error('❌ Analysis error:', error.message)
