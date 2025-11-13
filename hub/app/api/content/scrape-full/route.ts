@@ -388,6 +388,12 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
         if (!data.metadata) data.metadata = {}
         data.metadata.numPages = extractedPDFData.numPages
         data.metadata.extractionMethod = 'pdf-parse'
+
+        // Check if PDF extracted but has no text (likely image-based)
+        if (!content || content.trim().length === 0) {
+          console.warn(`⚠️ PDF extracted successfully but contains no text (likely image-based): ${url}`)
+          throw new Error('PDF contains no extractable text - may be an image-based/scanned document that requires OCR')
+        }
       } catch (pdfError: any) {
         console.error('Failed to extract PDF text:', pdfError.message)
         throw new Error(`Failed to extract PDF content: ${pdfError.message}`)
