@@ -1,7 +1,7 @@
 import './globals.css'
 import Link from 'next/link'
 import type { Metadata } from 'next'
-import { MessageCircle, Wrench, Home, FileText } from 'lucide-react'
+import { MessageCircle, Wrench, Home, FileText, Video } from 'lucide-react'
 
 export const metadata: Metadata = {
   title: 'SMART Connect Hub',
@@ -36,6 +36,14 @@ export default function RootLayout({
                   >
                     <MessageCircle className="h-4 w-4" aria-hidden="true" />
                     <span>AI Chat</span>
+                  </Link>
+                  <Link
+                    href="/media"
+                    className="flex items-center gap-2 hover:text-[#00A5E0] transition-colors py-2 px-3 rounded-lg hover:bg-[#0066A1] min-h-[44px]"
+                    aria-label="Media Library"
+                  >
+                    <Video className="h-4 w-4" aria-hidden="true" />
+                    <span>Media Library</span>
                   </Link>
                   <Link
                     href="/interviews"
@@ -75,6 +83,7 @@ export default function RootLayout({
                 <h3 className="text-lg font-bold mb-4">Quick Links</h3>
                 <ul className="space-y-2 text-sm">
                   <li><Link href="/chat" className="text-gray-400 hover:text-white transition-colors">AI Chat</Link></li>
+                  <li><Link href="/media" className="text-gray-400 hover:text-white transition-colors">Media Library</Link></li>
                   <li><Link href="/interviews" className="text-gray-400 hover:text-white transition-colors">Interviews</Link></li>
                   <li><Link href="/tools" className="text-gray-400 hover:text-white transition-colors">Tools</Link></li>
                 </ul>
