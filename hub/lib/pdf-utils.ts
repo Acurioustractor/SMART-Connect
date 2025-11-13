@@ -1,3 +1,6 @@
+// Import PDFParse at the top level to avoid module resolution issues in Next.js
+import { PDFParse } from 'pdf-parse'
+
 /**
  * Extract text content from a PDF buffer
  *
@@ -10,9 +13,6 @@ export async function extractPDFText(pdfBuffer: Buffer): Promise<{
   info: any
 }> {
   try {
-    // pdf-parse v2.x has a new API with PDFParse class
-    const { PDFParse } = require('pdf-parse')
-
     // Create parser instance with the buffer
     const parser = new PDFParse({ data: pdfBuffer })
 
