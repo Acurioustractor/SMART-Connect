@@ -199,8 +199,17 @@ async function transcribeLargeFile(
       const ffmpegCommand = `ffmpeg -y -i "${filePath}" -ss ${startOffset} -t ${chunkDuration} -acodec libmp3lame -ab 128k "${chunkPath}"`;
       await execAsync(ffmpegCommand);
 
-      // Transcribe chunk
-      const chunkResult = await transcribeAudio(chunkPath, options);
+      // Transcribe chunk with retry logic
+      let chunkResult = await transcribeAudio(chunkPath, options);
+      let retryCount = 0;
+      const maxRetries = 2;
+
+      while (!chunkResult.success && retryCount < maxRetries) {
+        retryCount++;
+        console.log(`[Transcription] Chunk ${i + 1} failed, retrying (${retryCount}/${maxRetries})...`);
+        await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5s before retry
+        chunkResult = await transcribeAudio(chunkPath, options);
+      }
 
       if (chunkResult.success) {
         // Adjust segment timestamps to account for chunk offset
@@ -213,7 +222,17 @@ async function transcribeLargeFile(
         }
         chunkResults.push(chunkResult);
       } else {
-        console.error(`[Transcription] Chunk ${i + 1} failed:`, chunkResult.error);
+        console.error(`[Transcription] Chunk ${i + 1} failed after ${maxRetries} retries:`, chunkResult.error);
+
+        // Clean up chunk file before throwing
+        try {
+          await fs.promises.unlink(chunkPath);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+
+        // Throw error instead of continuing with partial results
+        throw new Error(`Chunk ${i + 1}/${numChunks} failed after ${maxRetries} retries: ${chunkResult.error}`);
       }
 
       // Clean up chunk file
