@@ -3,6 +3,7 @@
 Date: October 10, 2025
 Email: Jonathan.Cornelius@one80tc.org
 Interview date: November 20, 2025
+Interview type: SMART Platform Review
 Notes : Works for one80TC
 SRAU Affiliation: Awards Winner - Lived Experience Facilitator
 Status: Interview locked

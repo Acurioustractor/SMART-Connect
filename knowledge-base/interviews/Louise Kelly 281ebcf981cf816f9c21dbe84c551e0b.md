@@ -3,6 +3,7 @@
 Date: October 7, 2025
 Email: LKelly@communitytransitions.com.au
 Interview date: October 13, 2025
+Interview type: SMART Platform Review
 Notes : Louise (Lou) is Deputy CEO 
 SRAU Affiliation: OARS are a long term partner, deliver SMART in correctional facilities and communities in SA 
 Status: Interview complete

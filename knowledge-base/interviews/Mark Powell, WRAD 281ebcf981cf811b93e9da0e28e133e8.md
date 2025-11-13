@@ -3,6 +3,7 @@
 Date: October 30, 2025
 Email: markp@wrad.org.au
 Interview date: October 14, 2025
+Interview type: SMART Platform Review
 Notes : CEO of WRAD
 SRAU Affiliation: Awards Winner - Family and Friends Facilitator
 Status: Interview complete

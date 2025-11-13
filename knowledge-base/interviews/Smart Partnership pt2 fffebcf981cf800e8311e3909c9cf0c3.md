@@ -1,5 +1,7 @@
 # Smart Partnership pt2
 
+Interview type: General
+
 Done?: No
 Created time: August 28, 2024 10:07 PM
 Done: No

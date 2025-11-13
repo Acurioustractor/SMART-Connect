@@ -2,10 +2,13 @@
 
 **Date:** [YYYY-MM-DD]
 **Interviewer:** [Name]
+**Interview Type:** [SMART Platform Review / General]
 **Meeting Type:** [General / Family & Friends / LGBTQIA+ / Justice System / Youth / Online / Other]
 **Location/Region:** [City, State/Territory or "Remote" or "Regional"]
 **Facilitator Demographics:** [Optional: Aboriginal/Torres Strait Islander, LGBTQIA+, etc.—only include with permission]
 **Years Facilitating:** [Duration]
+
+**Note:** Use "SMART Platform Review" for interviews conducted with a specific date about the platform. Use "General" for general conversations and content interviews.
 
 ---
 

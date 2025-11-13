@@ -1,5 +1,7 @@
 # Stuart Fryers
 
+Interview type: General
+
 Done?: No
 Created time: November 12, 2025 8:07 PM
 Done: No

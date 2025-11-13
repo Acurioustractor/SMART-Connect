@@ -3,6 +3,7 @@
 Date: October 27, 2025
 Email: bradgunders@hotmail.com
 Interview date: November 13, 2025
+Interview type: SMART Platform Review
 Notes : Recommended by Denis 
 Works for Lives Lived Well, one of SRAU's Thrive Members
 SRAU Affiliation: Facilitator - Standard SMART

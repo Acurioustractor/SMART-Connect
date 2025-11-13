@@ -1,5 +1,7 @@
 # Tony Wales
 
+Interview type: General
+
 Done?: No
 Created time: November 12, 2025 8:08 PM
 Done: No

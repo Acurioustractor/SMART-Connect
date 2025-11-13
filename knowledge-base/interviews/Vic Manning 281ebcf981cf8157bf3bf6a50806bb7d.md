@@ -1,5 +1,7 @@
 # Vic Manning
 
+Interview type: General
+
 Date: October 21, 2025
 Email: victoria.manning@monash.edu
 Notes : Monash University 

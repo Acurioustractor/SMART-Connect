@@ -8,6 +8,7 @@ export interface Interview {
   date?: string
   email?: string
   interviewDate?: string
+  interviewType?: 'smart_platform_review' | 'general'
   notes?: string
   affiliation?: string
   status?: string
@@ -88,9 +89,23 @@ export async function GET() {
       const dateMatch = content.match(/Date:\s*(.+)$/m)
       const emailMatch = content.match(/Email:\s*(.+)$/m)
       const interviewDateMatch = content.match(/Interview date:\s*(.+)$/m)
+      const interviewTypeMatch = content.match(/Interview type:\s*(.+)$/m)
       const notesMatch = content.match(/Notes\s*:\s*(.+)$/m)
       const affiliationMatch = content.match(/SRAU Affiliation:\s*(.+)$/m)
       const statusMatch = content.match(/Status:\s*(.+)$/m)
+
+      // Determine interview type
+      // Priority: 1) Explicit tag in markdown, 2) Auto-detect based on interview date
+      let interviewType: 'smart_platform_review' | 'general' = 'general'
+      if (interviewTypeMatch) {
+        const typeValue = interviewTypeMatch[1].trim().toLowerCase()
+        interviewType = typeValue === 'smart_platform_review' || typeValue === 'smart platform review'
+          ? 'smart_platform_review'
+          : 'general'
+      } else {
+        // Auto-detect: if interview has an interview date, it's a SMART platform review
+        interviewType = interviewDateMatch ? 'smart_platform_review' : 'general'
+      }
 
       // Try to load AI analysis
       let summary = ''
@@ -129,6 +144,7 @@ export async function GET() {
         date: dateMatch ? dateMatch[1].trim() : undefined,
         email: emailMatch ? emailMatch[1].trim() : undefined,
         interviewDate: interviewDateMatch ? interviewDateMatch[1].trim() : undefined,
+        interviewType,
         notes: notesMatch ? notesMatch[1].trim() : undefined,
         affiliation: affiliationMatch ? affiliationMatch[1].trim() : undefined,
         status: statusMatch ? statusMatch[1].trim() : undefined,

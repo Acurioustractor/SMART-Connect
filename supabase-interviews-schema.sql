@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.interviews (
   name TEXT NOT NULL,
   email TEXT,
   interview_date DATE,
+  interview_type TEXT DEFAULT 'general' CHECK (interview_type IN ('smart_platform_review', 'general')),
   affiliation TEXT,
   role TEXT,
   status TEXT DEFAULT 'completed' CHECK (status IN ('scheduled', 'in_progress', 'completed')),
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS public.interviews (
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_interviews_name ON public.interviews(name);
 CREATE INDEX IF NOT EXISTS idx_interviews_date ON public.interviews(interview_date DESC);
+CREATE INDEX IF NOT EXISTS idx_interviews_type ON public.interviews(interview_type);
 
 -- =====================================================
 -- INTERVIEW ANALYSIS TABLE
@@ -269,13 +271,14 @@ SELECT
   i.id,
   i.name,
   i.interview_date,
+  i.interview_type,
   COUNT(DISTINCT c.id) as course_suggestions,
   COUNT(DISTINCT f.id) as feature_suggestions,
   (COUNT(DISTINCT c.id) + COUNT(DISTINCT f.id)) as total_citations
 FROM public.interviews i
 LEFT JOIN public.learnworld_courses c ON i.id = ANY(c.source_interviews)
 LEFT JOIN public.platform_features f ON i.id = ANY(f.source_interviews)
-GROUP BY i.id, i.name, i.interview_date
+GROUP BY i.id, i.name, i.interview_date, i.interview_type
 ORDER BY total_citations DESC;
 
 -- LearnWorld course pipeline

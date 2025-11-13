@@ -3,6 +3,7 @@
 Date: October 7, 2025
 Email: fishers.oysters@gmail.com
 Interview date: October 8, 2025
+Interview type: SMART Platform Review
 SRAU Affiliation: SRAU Board, Trained Yarn SMART Facilitator
 Status: Interview complete
 

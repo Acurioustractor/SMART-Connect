@@ -2,7 +2,47 @@
 
 **Total Interviews:** 24
 **Date Range:** 2024-2025
-**Last Updated:** 2025-11-12
+**Last Updated:** 2025-11-13
+
+---
+
+## Interview Type Classification
+
+Interviews are now tagged with one of two types for easier filtering and analysis:
+
+### SMART Platform Review Interviews (12)
+**Characteristics:** Structured interviews conducted on specific dates to gather feedback about the SMART platform
+**Identifier:** Have "Interview date:" field in metadata
+
+- Alison Beck (Oct 28, 2025)
+- Ambika Scott Jodrell (Oct 15, 2025)
+- Brad Gunders (Oct 23, 2025)
+- Danielle Caruana (Oct 28, 2025)
+- Diego Gonzalez (Nov 20, 2025)
+- Jonathan Cornelius (Oct 14, 2025)
+- Louise Kelly (Oct 25, 2025)
+- Mark Powell, WRAD (Oct 24, 2025)
+- Mitch Robinson (Oct 29, 2025)
+- Nigel Harpley (Oct 21, 2025)
+- Shaun Fisher (Oct 16, 2025)
+- Sonia Butler (Nov 19, 2025)
+
+### General Interviews (10)
+**Characteristics:** General conversations, content gathering, and staff perspectives
+**Identifier:** No specific interview date field
+
+- Ambika Interview Content (Extended)
+- April Interview Content
+- Interview Chris Gimpel (SMART Stories)
+- Jen Webster
+- Nicole Dickenson (Volunteer)
+- Sanjit
+- Smart Partnership pt2
+- Stuart Fryers
+- Tony Wales
+- Vic Manning
+
+**Usage:** You can now filter interviews by type when analyzing data or generating reports. The API automatically detects the type based on the presence of an interview date.
 
 ---
 

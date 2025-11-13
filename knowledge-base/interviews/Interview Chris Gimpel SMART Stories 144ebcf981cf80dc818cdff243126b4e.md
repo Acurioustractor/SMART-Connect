@@ -1,5 +1,7 @@
 # Interview Chris Gimpel // SMART Stories
 
+Interview type: General
+
 Done?: No
 Created time: November 20, 2024 2:38 PM
 Done: No

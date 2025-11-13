@@ -1,5 +1,7 @@
 # April Interview Content
 
+Interview type: General
+
 Done?: No
 Created time: October 10, 2024 8:16 PM
 Done: No

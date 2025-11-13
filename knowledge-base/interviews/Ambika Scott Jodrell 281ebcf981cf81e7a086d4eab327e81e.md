@@ -3,6 +3,7 @@
 Date: October 23, 2025
 Email: a.scottjodrell@gmail.com
 Interview date: October 8, 2025
+Interview type: SMART Platform Review
 Notes : Highly engaged, also does contract training for us 
 SRAU Affiliation: Faciltator, LGBTIQA+ programs 
 Status: Interview complete

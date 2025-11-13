@@ -1,5 +1,7 @@
 # Ambika Interview Content
 
+Interview type: General
+
 Days Left: 485 Days Past Due ⁉
 Assign: Benjamin Knight
 Deadline: July 15, 2024

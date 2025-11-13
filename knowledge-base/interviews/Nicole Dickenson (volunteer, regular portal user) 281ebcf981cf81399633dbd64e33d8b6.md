@@ -1,5 +1,7 @@
 # Nicole Dickenson (volunteer, regular portal user)
 
+Interview type: General
+
 Date: October 24, 2025
 Email: nixtacy@gmail.com
 Notes : Regular Portal User, currently co-facilitating a meeting 
