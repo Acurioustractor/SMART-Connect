@@ -51,6 +51,29 @@ async function processMediaItem(mediaItem: any, baseUrl: string): Promise<{
       signal: controller.signal,
     }).finally(() => clearTimeout(timeoutId));
 
+    // Check response status before parsing
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      try {
+        const errorBody = await response.json();
+        if (errorBody.error) {
+          errorMessage = errorBody.error;
+        }
+      } catch {
+        // If JSON parsing fails, try to get text
+        try {
+          const errorText = await response.text();
+          if (errorText) {
+            errorMessage += ` - ${errorText.slice(0, 200)}`;
+          }
+        } catch {
+          // Ignore text parsing errors
+        }
+      }
+      console.log(`   ❌ Failed: ${errorMessage}`);
+      return { success: false, error: errorMessage };
+    }
+
     const result = await response.json();
 
     if (result.success) {
@@ -70,14 +93,30 @@ async function processMediaItem(mediaItem: any, baseUrl: string): Promise<{
       return { success: false, error: result.error };
     }
   } catch (error: any) {
-    // Provide clearer error message for timeout/abort errors
+    // Provide clearer error messages for different error types
     if (error.name === 'AbortError') {
       const errorMsg = 'Request timeout (exceeded 30 minutes) - file may be too large';
       console.log(`   ❌ Error: ${errorMsg}`);
       return { success: false, error: errorMsg };
     }
-    console.log(`   ❌ Error: ${error.message}`);
-    return { success: false, error: error.message };
+
+    // Enhanced error reporting for fetch failures
+    let errorMsg = error.message;
+    if (error.cause) {
+      errorMsg += ` (Cause: ${error.cause.message || error.cause})`;
+    }
+
+    // Provide helpful context for common errors
+    if (errorMsg.includes('fetch failed') || errorMsg.includes('ECONNREFUSED')) {
+      errorMsg += ` - Is the server running at ${baseUrl}?`;
+    } else if (errorMsg.includes('ENOTFOUND') || errorMsg.includes('getaddrinfo')) {
+      errorMsg += ' - DNS resolution failed';
+    } else if (errorMsg.includes('ETIMEDOUT')) {
+      errorMsg += ' - Connection timed out';
+    }
+
+    console.log(`   ❌ Error: ${errorMsg}`);
+    return { success: false, error: errorMsg };
   }
 }
 

@@ -305,35 +305,53 @@ export async function POST(request: NextRequest) {
 
         // Create embeddings for each chunk
         const embeddings = [];
-        for (const chunk of chunks) {
-          const response = await openai.embeddings.create({
-            model: 'text-embedding-ada-002',
-            input: chunk.text,
-          });
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          try {
+            const response = await openai.embeddings.create({
+              model: 'text-embedding-ada-002',
+              input: chunk.text,
+            });
 
-          embeddings.push({
-            media_item_id: mediaItemId,
-            transcript_id: transcript.id,
-            chunk_text: chunk.text,
-            chunk_index: chunk.index,
-            start_time_seconds: chunk.startTime,
-            end_time_seconds: chunk.endTime,
-            embedding: response.data[0].embedding,
-            chunk_word_count: chunk.text.split(/\s+/).length,
-          });
+            embeddings.push({
+              media_item_id: mediaItemId,
+              transcript_id: transcript.id,
+              chunk_text: chunk.text,
+              chunk_index: chunk.index,
+              start_time_seconds: chunk.startTime,
+              end_time_seconds: chunk.endTime,
+              embedding: response.data[0].embedding,
+              chunk_word_count: chunk.text.split(/\s+/).length,
+            });
 
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100));
+            // Log progress every 10 chunks
+            if ((i + 1) % 10 === 0 || i === chunks.length - 1) {
+              console.log(`[Media Process] Embeddings progress: ${i + 1}/${chunks.length}`);
+            }
+
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (embeddingError: any) {
+            console.error(`[Media Process] Failed to create embedding for chunk ${i}:`, embeddingError.message);
+            throw new Error(`Embedding creation failed at chunk ${i + 1}/${chunks.length}: ${embeddingError.message}`);
+          }
         }
 
+        console.log(`[Media Process] All ${embeddings.length} embeddings created successfully`);
+
         // Insert embeddings
+        console.log(`[Media Process] Inserting ${embeddings.length} embeddings into database...`);
         const { error: embeddingError } = await supabase
           .from('media_embeddings')
           .insert(embeddings);
 
         if (embeddingError) {
+          console.error('[Media Process] Database insert error:', embeddingError);
           throw new Error(`Failed to save embeddings: ${embeddingError.message}`);
         }
+
+        console.log(`[Media Process] Embeddings saved to database successfully`);
+
 
         // Update media item
         await supabase
@@ -379,15 +397,24 @@ export async function POST(request: NextRequest) {
 
     console.log('[Media Process] Processing complete!');
 
-    return NextResponse.json({
+    const responseData = {
       success: true,
       results,
       message: 'Media processing completed',
-    });
-  } catch (error) {
+    };
+
+    console.log('[Media Process] Sending response...');
+    return NextResponse.json(responseData);
+  } catch (error: any) {
     console.error('[Media Process] Error:', error);
+    console.error('[Media Process] Error stack:', error.stack);
+
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        success: false,
+        error: error.message || 'Internal server error',
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
