@@ -1,5 +1,5 @@
-// Import PDFParse at the top level to avoid module resolution issues in Next.js
-import { PDFParse } from 'pdf-parse'
+// Import PDFParse as default export - this is the correct way for pdf-parse
+import PDFParse from 'pdf-parse'
 
 /**
  * Extract text content from a PDF buffer
@@ -13,22 +13,13 @@ export async function extractPDFText(pdfBuffer: Buffer): Promise<{
   info: any
 }> {
   try {
-    // Create parser instance with the buffer
-    const parser = new PDFParse({ data: pdfBuffer })
-
-    // Get document info to know the total pages
-    const infoResult = await parser.getInfo()
-
-    // Extract text from all pages
-    const textResult = await parser.getText()
-
-    // Clean up
-    await parser.destroy()
+    // pdf-parse is a function that takes a buffer and returns a promise
+    const data = await PDFParse(pdfBuffer)
 
     return {
-      text: textResult.text,
-      numPages: infoResult.total,
-      info: infoResult.info || {}
+      text: data.text,
+      numPages: data.numpages,
+      info: data.info || {}
     }
   } catch (error: any) {
     throw new Error(`Failed to extract PDF text: ${error.message}`)
