@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import FirecrawlApp from '@mendable/firecrawl-js'
 import { createClient } from '@supabase/supabase-js'
 import OpenAI from 'openai'
+import { downloadAndExtractPDF, cleanPDFText } from '@/lib/pdf-utils'
 
 // Initialize clients
 const getFirecrawl = () => {
@@ -369,7 +370,29 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
     console.log('HTML length:', data?.html?.length || 0)
 
     // For PDFs, prefer html since markdown is often empty
-    const content = data?.html || data?.markdown || data?.content || ''
+    let content = data?.html || data?.markdown || data?.content || ''
+    let extractedPDFData: { text: string; numPages: number; buffer: Buffer } | null = null
+
+    // If content is empty and this is a PDF, try direct PDF text extraction
+    const isPdf = url.toLowerCase().endsWith('.pdf')
+    if ((!content || content.trim().length === 0 || content === '<html><body><div></div></body></html>') && isPdf) {
+      console.log('Firecrawl returned empty content for PDF, attempting direct extraction...')
+
+      try {
+        extractedPDFData = await downloadAndExtractPDF(url)
+        content = cleanPDFText(extractedPDFData.text)
+
+        console.log(`✓ Extracted ${extractedPDFData.numPages} pages, ${content.length} characters`)
+
+        // Update metadata with extracted info
+        if (!data.metadata) data.metadata = {}
+        data.metadata.numPages = extractedPDFData.numPages
+        data.metadata.extractionMethod = 'pdf-parse'
+      } catch (pdfError: any) {
+        console.error('Failed to extract PDF text:', pdfError.message)
+        throw new Error(`Failed to extract PDF content: ${pdfError.message}`)
+      }
+    }
 
     if (!content || content.trim().length === 0) {
       console.error('Empty content from Firecrawl for URL:', url)
@@ -377,7 +400,6 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
     }
 
     // Determine content type
-    const isPdf = url.toLowerCase().endsWith('.pdf')
     const contentType = classifyContentType(url, data.metadata?.title || '')
 
     // Extract metadata
@@ -428,7 +450,7 @@ async function scrapeSingleUrl(url: string, parentUrl?: string) {
 
     // Handle PDFs
     if (isPdf && scrapedContent) {
-      await processPDF(supabase, scrapedContent.id, data, url, title)
+      await processPDF(supabase, scrapedContent.id, data, url, title, extractedPDFData?.buffer)
     }
 
     // Generate embeddings
@@ -731,17 +753,26 @@ async function processAndStoreCrawlResults(jobId: string) {
 async function downloadAndStorePDF(
   supabase: any,
   pdfUrl: string,
-  title: string
+  title: string,
+  existingBuffer?: Buffer
 ): Promise<string> {
-  // Download the PDF
-  const response = await fetch(pdfUrl)
+  let buffer: Buffer
 
-  if (!response.ok) {
-    throw new Error(`Failed to download PDF: ${response.status} ${response.statusText}`)
+  if (existingBuffer) {
+    // Use the provided buffer (already downloaded during text extraction)
+    buffer = existingBuffer
+    console.log('Using existing PDF buffer from extraction')
+  } else {
+    // Download the PDF
+    const response = await fetch(pdfUrl)
+
+    if (!response.ok) {
+      throw new Error(`Failed to download PDF: ${response.status} ${response.statusText}`)
+    }
+
+    const arrayBuffer = await response.arrayBuffer()
+    buffer = Buffer.from(arrayBuffer)
   }
-
-  const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
 
   // Generate a safe filename from the URL or title
   const urlPath = new URL(pdfUrl).pathname
@@ -777,14 +808,15 @@ async function processPDF(
   scrapedContentId: string,
   page: any,
   url: string,
-  title: string
+  title: string,
+  existingBuffer?: Buffer
 ) {
   const content = page.markdown || page.html || ''
 
   // Download and store the actual PDF file
   let filePath: string | null = null
   try {
-    filePath = await downloadAndStorePDF(supabase, url, title)
+    filePath = await downloadAndStorePDF(supabase, url, title, existingBuffer)
   } catch (error: any) {
     console.error(`Failed to download PDF from ${url}:`, error.message)
     // Continue even if PDF download fails - we still have extracted text
