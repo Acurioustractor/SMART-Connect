@@ -813,6 +813,8 @@ async function downloadAndStorePDF(
   const storagePath = `smart-recovery/${safeFilename}`
 
   // Upload to Supabase Storage
+  console.log(`📤 Uploading PDF to storage: ${storagePath} (${Math.round(buffer.length / 1024)}KB)`)
+
   const { data, error } = await supabase.storage
     .from('pdfs')
     .upload(storagePath, buffer, {
@@ -822,8 +824,11 @@ async function downloadAndStorePDF(
     })
 
   if (error) {
+    console.error(`❌ Storage upload failed:`, error)
     throw new Error(`Failed to upload PDF to storage: ${error.message}`)
   }
+
+  console.log(`✅ PDF uploaded successfully to: ${storagePath}`)
 
   // Return the storage path
   return storagePath
@@ -847,7 +852,8 @@ async function processPDF(
   try {
     filePath = await downloadAndStorePDF(supabase, url, title, existingBuffer)
   } catch (error: any) {
-    console.error(`Failed to download PDF from ${url}:`, error.message)
+    console.error(`❌ Failed to store PDF from ${url}:`, error.message)
+    console.error(`   Error details:`, error)
     // Continue even if PDF download fails - we still have extracted text
   }
 
