@@ -10,14 +10,25 @@ export async function extractPDFText(pdfBuffer: Buffer): Promise<{
   info: any
 }> {
   try {
-    // Lazy load pdf-parse to avoid initialization issues at module load time
-    const pdfParse = require('pdf-parse')
-    const data = await pdfParse(pdfBuffer)
+    // pdf-parse v2.x has a new API with PDFParse class
+    const { PDFParse } = require('pdf-parse')
+
+    // Create parser instance with the buffer
+    const parser = new PDFParse({ data: pdfBuffer })
+
+    // Get document info to know the total pages
+    const infoResult = await parser.getInfo()
+
+    // Extract text from all pages
+    const textResult = await parser.getText()
+
+    // Clean up
+    await parser.destroy()
 
     return {
-      text: data.text,
-      numPages: data.numpages,
-      info: data.info
+      text: textResult.text,
+      numPages: infoResult.total,
+      info: infoResult.info || {}
     }
   } catch (error: any) {
     throw new Error(`Failed to extract PDF text: ${error.message}`)
