@@ -1,10 +1,10 @@
 # Vic Manning
 
-Interview type: General
-
 Date: October 21, 2025
 Email: victoria.manning@monash.edu
-Notes : Monash University 
+Interview date: November 14, 2025
+Interview type: SMART Platform Review
+Notes : Monash University
 SRAU Affiliation: SRAU Board, Research Advisory Committee
 Status: Contacted
 

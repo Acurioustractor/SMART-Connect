@@ -115,6 +115,12 @@ export default function InterviewsPage() {
   const completionPercentage = interviews.length > 0 ? Math.round((analyzedCount / interviews.length) * 100) : 0
   const platformReviewCount = interviews.filter(i => i.interviewType === 'smart_platform_review').length
   const generalCount = interviews.filter(i => i.interviewType === 'general').length
+  const transcriptCompleteCount = interviews.filter(i =>
+    i.status && (i.status.toLowerCase().includes('complete') || i.status.toLowerCase().includes('locked'))
+  ).length
+  const noTranscriptCount = interviews.filter(i =>
+    i.status && !i.status.toLowerCase().includes('complete') && !i.status.toLowerCase().includes('locked')
+  ).length
 
   const parseInterviewContent = (content: string) => {
     // Extract key sections from the interview
@@ -232,8 +238,8 @@ export default function InterviewsPage() {
             </div>
           </div>
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+          {/* Stats Cards - Row 1 */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -280,11 +286,28 @@ export default function InterviewsPage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Analyzed</p>
+                    <p className="text-sm font-medium text-gray-600">AI Analysis</p>
                     <p className="text-3xl font-bold text-[#06D6A0] mt-1">{analyzedCount}</p>
                   </div>
                   <div className="p-3 bg-[#06D6A0]/10 rounded-lg">
                     <CheckCircle2 className="h-6 w-6 text-[#06D6A0]" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Stats Cards - Row 2 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Transcript Complete</p>
+                    <p className="text-3xl font-bold text-purple-700 mt-1">{transcriptCompleteCount}</p>
+                  </div>
+                  <div className="p-3 bg-purple-100 rounded-lg">
+                    <FileText className="h-6 w-6 text-purple-700" />
                   </div>
                 </div>
               </CardContent>
@@ -294,11 +317,25 @@ export default function InterviewsPage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Completion</p>
+                    <p className="text-sm font-medium text-gray-600">No Transcript</p>
+                    <p className="text-3xl font-bold text-gray-600 mt-1">{noTranscriptCount}</p>
+                  </div>
+                  <div className="p-3 bg-gray-100 rounded-lg">
+                    <AlertCircle className="h-6 w-6 text-gray-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Analysis Rate</p>
                     <p className="text-3xl font-bold text-[#003B5C] mt-1">{completionPercentage}%</p>
                   </div>
                   <div className="p-3 bg-[#003B5C]/10 rounded-lg">
-                    <CheckCircle2 className="h-6 w-6 text-[#003B5C]" />
+                    <BarChart3 className="h-6 w-6 text-[#003B5C]" />
                   </div>
                 </div>
               </CardContent>
@@ -398,7 +435,7 @@ export default function InterviewsPage() {
                 <CardHeader className="cursor-pointer" onClick={() => toggleExpand(interview.id, interview.filename)}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <CardTitle className="text-xl text-gray-900 flex items-center gap-2">
                           <User className="h-5 w-5 text-[#003B5C]" aria-hidden="true" />
                           {interview.name}
@@ -410,6 +447,17 @@ export default function InterviewsPage() {
                               : 'bg-[#FFD23F]/10 text-[#FFD23F]'
                           }`}>
                             {interview.interviewType === 'smart_platform_review' ? 'Platform Review' : 'General'}
+                          </span>
+                        )}
+                        {interview.status && (
+                          <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                            interview.status.toLowerCase().includes('complete') || interview.status.toLowerCase().includes('locked')
+                              ? 'bg-purple-100 text-purple-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {interview.status.toLowerCase().includes('complete') || interview.status.toLowerCase().includes('locked')
+                              ? 'Transcript Complete'
+                              : 'No Transcript'}
                           </span>
                         )}
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full ${

@@ -10,11 +10,11 @@
 
 Interviews are now tagged with one of two types for easier filtering and analysis:
 
-### SMART Platform Review Interviews (12)
+### SMART Platform Review Interviews (13)
 **Characteristics:** Structured interviews conducted on specific dates to gather feedback about the SMART platform
 **Identifier:** Have "Interview date:" field in metadata
 
-- Alison Beck (Oct 28, 2025)
+- Alison Beck (Nov 14, 2025)
 - Ambika Scott Jodrell (Oct 15, 2025)
 - Brad Gunders (Oct 23, 2025)
 - Danielle Caruana (Oct 28, 2025)
@@ -26,8 +26,9 @@ Interviews are now tagged with one of two types for easier filtering and analysi
 - Nigel Harpley (Oct 21, 2025)
 - Shaun Fisher (Oct 16, 2025)
 - Sonia Butler (Nov 19, 2025)
+- Vic Manning (Nov 14, 2025)
 
-### General Interviews (10)
+### General Interviews (9)
 **Characteristics:** General conversations, content gathering, and staff perspectives
 **Identifier:** No specific interview date field
 
@@ -40,9 +41,24 @@ Interviews are now tagged with one of two types for easier filtering and analysi
 - Smart Partnership pt2
 - Stuart Fryers
 - Tony Wales
-- Vic Manning
 
 **Usage:** You can now filter interviews by type when analyzing data or generating reports. The API automatically detects the type based on the presence of an interview date.
+
+---
+
+## Interview Completion Status
+
+Interviews are tracked by completion status to identify which have full transcripts:
+
+### Transcript Complete (12)
+**Status:** "Interview complete" or "Interview locked"
+**Characteristics:** Full interview transcripts available for analysis
+
+### No Transcript (3)
+**Status:** "Contacted" or "Not started"
+**Characteristics:** Interview scheduled or in progress, transcript not yet available
+- Nicole Dickenson (Contacted)
+- Vic Manning (Contacted)
 
 ---
 
