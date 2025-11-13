@@ -156,14 +156,129 @@ async function transcribeLargeFile(
   filePath: string,
   options: TranscriptionOptions
 ): Promise<TranscriptionResult> {
+  const startTime = Date.now();
+
   console.log('[Transcription] Splitting large file into chunks...');
 
-  // TODO: Implement audio splitting using ffmpeg
-  // For now, return error
-  return {
-    success: false,
-    error: 'Files larger than 25MB are not yet supported. Please compress the audio file.',
-  };
+  try {
+    const { promisify } = await import('util');
+    const { exec } = await import('child_process');
+    const execAsync = promisify(exec);
+
+    // Check if ffmpeg is available
+    try {
+      await execAsync('ffmpeg -version');
+    } catch (error) {
+      throw new Error('ffmpeg is required for processing large files. Install it with: brew install ffmpeg (Mac) or apt-get install ffmpeg (Linux)');
+    }
+
+    // Get audio duration
+    const ffprobeCommand = `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`;
+    const { stdout: durationStr } = await execAsync(ffprobeCommand);
+    const totalDuration = parseFloat(durationStr.trim());
+
+    console.log(`[Transcription] Total duration: ${totalDuration.toFixed(1)}s`);
+
+    // Split into 20-minute chunks (to stay well under 25MB)
+    const chunkDuration = 20 * 60; // 20 minutes in seconds
+    const numChunks = Math.ceil(totalDuration / chunkDuration);
+
+    console.log(`[Transcription] Splitting into ${numChunks} chunks...`);
+
+    const chunkResults: TranscriptionResult[] = [];
+    const tempDir = path.dirname(filePath);
+
+    // Process each chunk
+    for (let i = 0; i < numChunks; i++) {
+      const startOffset = i * chunkDuration;
+      const chunkPath = path.join(tempDir, `chunk_${i}_${path.basename(filePath)}`);
+
+      console.log(`[Transcription] Processing chunk ${i + 1}/${numChunks} (${startOffset}s - ${startOffset + chunkDuration}s)...`);
+
+      // Extract chunk using ffmpeg
+      const ffmpegCommand = `ffmpeg -y -i "${filePath}" -ss ${startOffset} -t ${chunkDuration} -acodec libmp3lame -ab 128k "${chunkPath}"`;
+      await execAsync(ffmpegCommand);
+
+      // Transcribe chunk
+      const chunkResult = await transcribeAudio(chunkPath, options);
+
+      if (chunkResult.success) {
+        // Adjust segment timestamps to account for chunk offset
+        if (chunkResult.segments) {
+          chunkResult.segments = chunkResult.segments.map(seg => ({
+            ...seg,
+            start: seg.start + startOffset,
+            end: seg.end + startOffset,
+          }));
+        }
+        chunkResults.push(chunkResult);
+      } else {
+        console.error(`[Transcription] Chunk ${i + 1} failed:`, chunkResult.error);
+      }
+
+      // Clean up chunk file
+      try {
+        await fs.promises.unlink(chunkPath);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+
+      // Small delay between chunks to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+
+    // Combine results
+    if (chunkResults.length === 0) {
+      return {
+        success: false,
+        error: 'All chunks failed to transcribe',
+        processingTimeMs: Date.now() - startTime,
+      };
+    }
+
+    const combinedText = chunkResults.map(r => r.text).join(' ');
+    const combinedSegments: TranscriptionSegment[] = [];
+    let segmentIdCounter = 0;
+
+    for (const result of chunkResults) {
+      if (result.segments) {
+        for (const seg of result.segments) {
+          combinedSegments.push({
+            ...seg,
+            id: segmentIdCounter++,
+          });
+        }
+      }
+    }
+
+    const wordCount = combinedText.split(/\s+/).length;
+    const totalCost = chunkResults.reduce((sum, r) => sum + (r.costUsd || 0), 0);
+    const processingTimeMs = Date.now() - startTime;
+
+    console.log(`[Transcription] Large file completed in ${processingTimeMs}ms`);
+    console.log(`[Transcription] Transcribed ${wordCount} words from ${numChunks} chunks`);
+    console.log(`[Transcription] Total cost: $${totalCost.toFixed(4)}`);
+
+    return {
+      success: true,
+      text: combinedText,
+      segments: combinedSegments,
+      language: chunkResults[0].language,
+      duration: totalDuration,
+      wordCount,
+      confidence: chunkResults.reduce((sum, r) => sum + (r.confidence || 0), 0) / chunkResults.length,
+      processingTimeMs,
+      costUsd: totalCost,
+    };
+  } catch (error) {
+    console.error('[Transcription] Large file error:', error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      processingTimeMs: Date.now() - startTime,
+    };
+  }
 }
 
 /**
