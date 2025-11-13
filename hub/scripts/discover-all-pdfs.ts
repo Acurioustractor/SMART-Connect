@@ -55,93 +55,118 @@ interface PDFDiscoveryResults {
 async function scanExistingContentForPDFs(): Promise<Map<string, PDFLink>> {
   console.log(chalk.blue('📄 Scanning existing content for PDF links...\n'))
 
-  // Get all scraped content
-  const { data: allContent, error } = await supabase
-    .from('scraped_content')
-    .select('url, title, content, markdown, internal_links, external_links')
-    .neq('content_type', 'pdf') // Don't scan PDFs themselves
-
-  if (error) {
-    throw new Error(`Failed to fetch content: ${error.message}`)
-  }
-
-  console.log(chalk.gray(`   Scanning ${allContent?.length || 0} pages for PDF links...\n`))
-
   const pdfLinks = new Map<string, PDFLink>()
 
-  // Regex patterns to find PDF links
-  const pdfPatterns = [
-    /href=["']([^"']*\.pdf[^"']*)["']/gi,           // HTML href attributes
-    /\[([^\]]+)\]\(([^)]*\.pdf[^)]*)\)/gi,          // Markdown links
-    /(https?:\/\/[^\s<>"]+\.pdf)/gi,                 // Direct URLs
-  ]
+  // Get total count first
+  const { count, error: countError } = await supabase
+    .from('scraped_content')
+    .select('*', { count: 'exact', head: true })
+    .neq('content_type', 'pdf')
 
-  for (const page of allContent || []) {
-    const textToSearch = [
-      page.content,
-      page.markdown,
-      page.internal_links?.join(' '),
-      page.external_links?.join(' ')
-    ].filter(Boolean).join('\n')
+  if (countError) {
+    throw new Error(`Failed to count content: ${countError.message}`)
+  }
 
-    for (const pattern of pdfPatterns) {
-      const matches = textToSearch.matchAll(pattern)
+  const totalPages = count || 0
+  console.log(chalk.gray(`   Found ${totalPages} pages to scan\n`))
 
-      for (const match of matches) {
-        // Extract PDF URL from match
-        let pdfUrl = match[1] || match[2] || match[0]
+  // Fetch and process in batches to avoid memory/timeout issues
+  const BATCH_SIZE = 100
+  let processed = 0
 
-        // Clean up URL - remove quotes, trim whitespace
-        pdfUrl = pdfUrl.trim().replace(/^['"]|['"]$/g, '')
+  for (let offset = 0; offset < totalPages; offset += BATCH_SIZE) {
+    const { data: batch, error } = await supabase
+      .from('scraped_content')
+      .select('url, title, content, markdown, internal_links, external_links')
+      .neq('content_type', 'pdf')
+      .range(offset, offset + BATCH_SIZE - 1)
 
-        // Remove malformed markdown syntax (e.g., "file.pdf](https://...")
-        // This happens when markdown is improperly parsed
-        pdfUrl = pdfUrl.replace(/\]\(https?:\/\/[^)]+$/, '')
+    if (error) {
+      throw new Error(`Failed to fetch content batch at offset ${offset}: ${error.message}`)
+    }
 
-        // Also clean up if there's a markdown link at the end
-        const pdfMatch = pdfUrl.match(/^(https?:\/\/[^\s\]]+\.pdf)/i)
-        if (pdfMatch) {
-          pdfUrl = pdfMatch[1]
-        }
+    if (!batch || batch.length === 0) {
+      break
+    }
 
-        // Make relative URLs absolute
-        if (pdfUrl.startsWith('/')) {
-          pdfUrl = `${TARGET_SITE}${pdfUrl}`
-        } else if (!pdfUrl.startsWith('http')) {
-          continue // Skip invalid URLs
-        }
+    processed += batch.length
+    process.stdout.write(chalk.gray(`   Processing: ${processed}/${totalPages} pages...\r`))
 
-        // Ensure it's actually a PDF URL
-        if (!pdfUrl.toLowerCase().includes('.pdf')) {
-          continue
-        }
+    // Process this batch
+    // Regex patterns to find PDF links
+    const pdfPatterns = [
+      /href=["']([^"']*\.pdf[^"']*)["']/gi,           // HTML href attributes
+      /\[([^\]]+)\]\(([^)]*\.pdf[^)]*)\)/gi,          // Markdown links
+      /(https?:\/\/[^\s<>"]+\.pdf)/gi,                 // Direct URLs
+    ]
 
-        // Final validation - must be a valid URL
-        try {
-          new URL(pdfUrl)
-        } catch {
-          console.log(chalk.yellow(`   ⚠️  Skipping malformed URL: ${pdfUrl.slice(0, 80)}`))
-          continue
-        }
+    for (const page of batch) {
+      const textToSearch = [
+        page.content,
+        page.markdown,
+        page.internal_links?.join(' '),
+        page.external_links?.join(' ')
+      ].filter(Boolean).join('\n')
 
-        // Add to our collection
-        if (!pdfLinks.has(pdfUrl)) {
-          pdfLinks.set(pdfUrl, {
-            pdfUrl,
-            sourcePages: [],
-            isInDatabase: false
-          })
-        }
+      for (const pattern of pdfPatterns) {
+        const matches = textToSearch.matchAll(pattern)
 
-        const pdfLink = pdfLinks.get(pdfUrl)!
-        if (!pdfLink.sourcePages.includes(page.url)) {
-          pdfLink.sourcePages.push(page.url)
+        for (const match of matches) {
+          // Extract PDF URL from match
+          let pdfUrl = match[1] || match[2] || match[0]
+
+          // Clean up URL - remove quotes, trim whitespace
+          pdfUrl = pdfUrl.trim().replace(/^['"]|['"]$/g, '')
+
+          // Remove malformed markdown syntax (e.g., "file.pdf](https://...")
+          // This happens when markdown is improperly parsed
+          pdfUrl = pdfUrl.replace(/\]\(https?:\/\/[^)]+$/, '')
+
+          // Also clean up if there's a markdown link at the end
+          const pdfMatch = pdfUrl.match(/^(https?:\/\/[^\s\]]+\.pdf)/i)
+          if (pdfMatch) {
+            pdfUrl = pdfMatch[1]
+          }
+
+          // Make relative URLs absolute
+          if (pdfUrl.startsWith('/')) {
+            pdfUrl = `${TARGET_SITE}${pdfUrl}`
+          } else if (!pdfUrl.startsWith('http')) {
+            continue // Skip invalid URLs
+          }
+
+          // Ensure it's actually a PDF URL
+          if (!pdfUrl.toLowerCase().includes('.pdf')) {
+            continue
+          }
+
+          // Final validation - must be a valid URL
+          try {
+            new URL(pdfUrl)
+          } catch {
+            // Silently skip malformed URLs during batch processing
+            continue
+          }
+
+          // Add to our collection
+          if (!pdfLinks.has(pdfUrl)) {
+            pdfLinks.set(pdfUrl, {
+              pdfUrl,
+              sourcePages: [],
+              isInDatabase: false
+            })
+          }
+
+          const pdfLink = pdfLinks.get(pdfUrl)!
+          if (!pdfLink.sourcePages.includes(page.url)) {
+            pdfLink.sourcePages.push(page.url)
+          }
         }
       }
     }
   }
 
-  console.log(chalk.green(`✅ Found ${pdfLinks.size} unique PDF links in content\n`))
+  console.log(chalk.green(`\n✅ Found ${pdfLinks.size} unique PDF links in content\n`))
   return pdfLinks
 }
 
