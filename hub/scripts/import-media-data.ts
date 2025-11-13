@@ -1,6 +1,7 @@
 /**
  * Script to import media data into the database
- * Run with: npx tsx scripts/import-media-data.ts
+ * Run with: npx tsx hub/scripts/import-media-data.ts
+ * Or from hub/scripts directory: npx tsx import-media-data.ts
  */
 
 // Media data provided by user
@@ -217,9 +218,7 @@ async function importMediaData() {
   }
 }
 
-// Run the import
-if (require.main === module) {
-  importMediaData();
-}
-
 export { importMediaData, mediaData };
+
+// Run the import when executed directly
+importMediaData();
