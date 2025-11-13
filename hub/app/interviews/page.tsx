@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, User, Calendar, Mail, FileText, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { Search, User, Calendar, Mail, FileText, ChevronDown, ChevronUp, Loader2, Sparkles, CheckCircle2, AlertCircle, BarChart3, BookOpen, Lightbulb, Users, Target, Heart } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Container } from '@/components/ui/container'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,49 @@ interface Interview {
   summary?: string
   keyThemes?: string[]
   filename: string
+  analyzed: boolean
+  analysis?: {
+    executiveSummary: string
+    keyThemes: Array<{
+      theme: string
+      description: string
+      evidence: string[]
+      significance: string
+    }>
+    powerfulQuotes: Array<{
+      quote: string
+      context: string
+      significance: string
+    }>
+    learnWorldContentSuggestions: Array<{
+      courseTitle: string
+      description: string
+      targetAudience: string
+      format: string
+      rationale: string
+      keyLearningOutcomes: string[]
+      estimatedLength: string
+    }>
+    facilitatorInsights: {
+      challenges: string[]
+      strengths: string[]
+      supportNeeds: string[]
+      learningPreferences: string
+    }
+    platformImplications: Array<{
+      insight: string
+      featureIdea: string
+      priority: string
+      rationale: string
+    }>
+    culturalConsiderations: {
+      relevant: boolean
+      insights: string[]
+      recommendations: string[]
+    }
+    oneLineTakeaway: string
+    analyzedAt: string
+  }
 }
 
 export default function InterviewsPage() {
@@ -29,6 +72,8 @@ export default function InterviewsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [expandedContent, setExpandedContent] = useState<string>('')
   const [loadingContent, setLoadingContent] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisProgress, setAnalysisProgress] = useState<string>('')
 
   useEffect(() => {
     fetchInterviews()
@@ -56,6 +101,50 @@ export default function InterviewsPage() {
       setLoading(false)
     }
   }
+
+  const analyzeAllInterviews = async () => {
+    if (!confirm('This will analyze all interviews that haven\'t been analyzed yet using GPT-4. This may take several minutes and will incur API costs. Continue?')) {
+      return
+    }
+
+    setAnalyzing(true)
+    setAnalysisProgress('Starting analysis...')
+
+    try {
+      const response = await fetch('/api/interviews/analyze-all', {
+        method: 'POST'
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setAnalysisProgress(`Analysis complete! Analyzed: ${result.analyzed}, Skipped: ${result.skipped}, Failed: ${result.failed}`)
+        // Refresh interviews to show new analysis
+        await fetchInterviews()
+        setTimeout(() => {
+          setAnalyzing(false)
+          setAnalysisProgress('')
+        }, 3000)
+      } else {
+        setAnalysisProgress('Analysis failed: ' + result.error)
+        setTimeout(() => {
+          setAnalyzing(false)
+          setAnalysisProgress('')
+        }, 5000)
+      }
+    } catch (error) {
+      console.error('Error analyzing interviews:', error)
+      setAnalysisProgress('Analysis failed')
+      setTimeout(() => {
+        setAnalyzing(false)
+        setAnalysisProgress('')
+      }, 5000)
+    }
+  }
+
+  const analyzedCount = interviews.filter(i => i.analyzed).length
+  const pendingCount = interviews.length - analyzedCount
+  const completionPercentage = interviews.length > 0 ? Math.round((analyzedCount / interviews.length) * 100) : 0
 
   const parseInterviewContent = (content: string) => {
     // Extract key sections from the interview
@@ -163,21 +252,115 @@ export default function InterviewsPage() {
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-gray-50">
       <Container size="xl" className="py-12">
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between">
-          <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">Facilitator Interviews</h1>
-            <p className="text-xl text-gray-600">
-              Browse through {interviews.length} interviews with SMART Recovery facilitators
-            </p>
+        <div className="mb-8">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <h1 className="text-4xl font-bold text-gray-900 mb-3">Facilitator Interviews</h1>
+              <p className="text-xl text-gray-600">
+                Browse through {interviews.length} interviews with SMART Recovery facilitators
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                onClick={analyzeAllInterviews}
+                disabled={analyzing || pendingCount === 0}
+                className="flex items-center gap-2 bg-[#06D6A0] hover:bg-[#05C090] text-white"
+                size="lg"
+              >
+                {analyzing ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-5 w-5" />
+                    Analyze All ({pendingCount})
+                  </>
+                )}
+              </Button>
+              <Button
+                onClick={() => window.location.href = '/interviews/upload'}
+                variant="outline"
+                className="flex items-center gap-2"
+                size="lg"
+              >
+                <FileText className="h-5 w-5" />
+                Add Interview
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={() => window.location.href = '/interviews/upload'}
-            className="flex items-center gap-2"
-            size="lg"
-          >
-            <FileText className="h-5 w-5" />
-            Add Interview
-          </Button>
+
+          {/* Analysis Progress */}
+          {analysisProgress && (
+            <Card className="mb-6 bg-blue-50 border-blue-200">
+              <CardContent className="py-4">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                  <p className="text-sm text-blue-900 font-medium">{analysisProgress}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total Interviews</p>
+                    <p className="text-3xl font-bold text-gray-900 mt-1">{interviews.length}</p>
+                  </div>
+                  <div className="p-3 bg-blue-100 rounded-lg">
+                    <FileText className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Analyzed</p>
+                    <p className="text-3xl font-bold text-[#06D6A0] mt-1">{analyzedCount}</p>
+                  </div>
+                  <div className="p-3 bg-[#06D6A0]/10 rounded-lg">
+                    <CheckCircle2 className="h-6 w-6 text-[#06D6A0]" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Pending</p>
+                    <p className="text-3xl font-bold text-[#FFD23F] mt-1">{pendingCount}</p>
+                  </div>
+                  <div className="p-3 bg-[#FFD23F]/10 rounded-lg">
+                    <AlertCircle className="h-6 w-6 text-[#FFD23F]" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Completion</p>
+                    <p className="text-3xl font-bold text-[#003B5C] mt-1">{completionPercentage}%</p>
+                  </div>
+                  <div className="p-3 bg-[#003B5C]/10 rounded-lg">
+                    <BarChart3 className="h-6 w-6 text-[#003B5C]" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
 
         {/* Search Bar */}
@@ -226,15 +409,38 @@ export default function InterviewsPage() {
             {filteredInterviews.map((interview) => (
               <Card
                 key={interview.id}
-                className="overflow-hidden hover:shadow-lg transition-shadow duration-200"
+                className={`overflow-hidden hover:shadow-lg transition-all duration-200 ${
+                  interview.analyzed
+                    ? 'border-l-4 border-l-[#06D6A0]'
+                    : 'border-l-4 border-l-[#FFD23F]'
+                }`}
               >
                 <CardHeader className="cursor-pointer" onClick={() => toggleExpand(interview.id, interview.filename)}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <CardTitle className="text-xl text-gray-900 mb-2 flex items-center gap-2">
-                        <User className="h-5 w-5 text-[#003B5C]" aria-hidden="true" />
-                        {interview.name}
-                      </CardTitle>
+                      <div className="flex items-center gap-3 mb-2">
+                        <CardTitle className="text-xl text-gray-900 flex items-center gap-2">
+                          <User className="h-5 w-5 text-[#003B5C]" aria-hidden="true" />
+                          {interview.name}
+                        </CardTitle>
+                        <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                          interview.analyzed
+                            ? 'bg-[#06D6A0]/10 text-[#06D6A0]'
+                            : 'bg-[#FFD23F]/10 text-[#FFD23F]'
+                        }`}>
+                          {interview.analyzed ? (
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Analyzed
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <AlertCircle className="h-3 w-3" />
+                              Pending
+                            </span>
+                          )}
+                        </span>
+                      </div>
                       <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                         {interview.interviewDate && (
                           <div className="flex items-center gap-1.5">
@@ -299,7 +505,277 @@ export default function InterviewsPage() {
                         <Loader2 className="h-6 w-6 animate-spin text-[#003B5C]" aria-hidden="true" />
                         <span className="ml-2 text-gray-600">Loading interview...</span>
                       </div>
+                    ) : interview.analyzed && interview.analysis ? (
+                      // Show rich GPT-4 analysis
+                      <div className="py-6 space-y-6">
+                        {/* One-Line Takeaway - Featured at top */}
+                        <div className="bg-gradient-to-br from-[#003B5C] to-[#0066A1] p-6 rounded-lg shadow-lg">
+                          <div className="flex items-start gap-3">
+                            <Sparkles className="h-6 w-6 text-[#FFD23F] flex-shrink-0 mt-1" />
+                            <div>
+                              <h3 className="text-sm font-semibold text-[#00A5E0] mb-2">Key Takeaway</h3>
+                              <p className="text-lg text-white leading-relaxed font-medium">{interview.analysis.oneLineTakeaway}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Executive Summary */}
+                        <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-[#003B5C]" />
+                            Executive Summary
+                          </h3>
+                          <p className="text-sm text-gray-800 leading-relaxed">{interview.analysis.executiveSummary}</p>
+                        </div>
+
+                        {/* Key Themes */}
+                        {interview.analysis.keyThemes && interview.analysis.keyThemes.length > 0 && (
+                          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 p-6 rounded-lg border border-blue-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <Target className="h-5 w-5 text-blue-600" />
+                              Key Themes
+                            </h3>
+                            <div className="space-y-4">
+                              {interview.analysis.keyThemes.map((theme, idx) => (
+                                <div key={idx} className="bg-white p-5 rounded-lg shadow-sm border border-blue-200">
+                                  <h4 className="font-bold text-[#003B5C] mb-2">{theme.theme}</h4>
+                                  <p className="text-sm text-gray-700 mb-3">{theme.description}</p>
+                                  {theme.evidence && theme.evidence.length > 0 && (
+                                    <div className="space-y-2 mb-3">
+                                      {theme.evidence.map((quote, qIdx) => (
+                                        <div key={qIdx} className="pl-4 border-l-2 border-blue-400">
+                                          <p className="text-sm italic text-gray-600">&ldquo;{quote}&rdquo;</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="pt-3 border-t border-blue-100">
+                                    <p className="text-xs font-medium text-blue-700">
+                                      <span className="font-semibold">Why it matters:</span> {theme.significance}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Powerful Quotes */}
+                        {interview.analysis.powerfulQuotes && interview.analysis.powerfulQuotes.length > 0 && (
+                          <div className="bg-gradient-to-br from-purple-50 to-pink-50 p-6 rounded-lg border border-purple-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <span className="text-2xl">💬</span>
+                              Powerful Quotes
+                            </h3>
+                            <div className="space-y-4">
+                              {interview.analysis.powerfulQuotes.map((item, idx) => (
+                                <div key={idx} className="bg-white p-5 rounded-lg shadow-sm">
+                                  <p className="text-base italic text-gray-800 mb-3 leading-relaxed">&ldquo;{item.quote}&rdquo;</p>
+                                  <div className="space-y-2 text-xs">
+                                    <p className="text-gray-600">
+                                      <span className="font-semibold text-purple-700">Context:</span> {item.context}
+                                    </p>
+                                    <p className="text-gray-600">
+                                      <span className="font-semibold text-purple-700">Significance:</span> {item.significance}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* LearnWorld Course Suggestions */}
+                        {interview.analysis.learnWorldContentSuggestions && interview.analysis.learnWorldContentSuggestions.length > 0 && (
+                          <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border border-green-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <BookOpen className="h-5 w-5 text-green-600" />
+                              LearnWorld Course Suggestions
+                            </h3>
+                            <div className="space-y-4">
+                              {interview.analysis.learnWorldContentSuggestions.map((course, idx) => (
+                                <div key={idx} className="bg-white p-5 rounded-lg shadow-sm border border-green-200">
+                                  <div className="flex items-start justify-between mb-3">
+                                    <h4 className="font-bold text-[#06D6A0] text-base">{course.courseTitle}</h4>
+                                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full whitespace-nowrap ml-2">
+                                      {course.format}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-700 mb-3">{course.description}</p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3 text-xs">
+                                    <div>
+                                      <span className="font-semibold text-gray-700">Target:</span>{' '}
+                                      <span className="text-gray-600">{course.targetAudience}</span>
+                                    </div>
+                                    <div>
+                                      <span className="font-semibold text-gray-700">Length:</span>{' '}
+                                      <span className="text-gray-600">{course.estimatedLength}</span>
+                                    </div>
+                                  </div>
+                                  {course.keyLearningOutcomes && course.keyLearningOutcomes.length > 0 && (
+                                    <div className="mb-3">
+                                      <p className="text-xs font-semibold text-gray-700 mb-2">Learning Outcomes:</p>
+                                      <ul className="space-y-1">
+                                        {course.keyLearningOutcomes.map((outcome, oIdx) => (
+                                          <li key={oIdx} className="flex items-start gap-2 text-xs text-gray-600">
+                                            <CheckCircle2 className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
+                                            <span>{outcome}</span>
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                  )}
+                                  <div className="pt-3 border-t border-green-100">
+                                    <p className="text-xs text-gray-600">
+                                      <span className="font-semibold text-green-700">Rationale:</span> {course.rationale}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Facilitator Insights */}
+                        {interview.analysis.facilitatorInsights && (
+                          <div className="bg-gradient-to-br from-amber-50 to-yellow-50 p-6 rounded-lg border border-amber-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <Users className="h-5 w-5 text-amber-600" />
+                              Facilitator Insights
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {interview.analysis.facilitatorInsights.challenges && interview.analysis.facilitatorInsights.challenges.length > 0 && (
+                                <div className="bg-white p-4 rounded-lg shadow-sm">
+                                  <h4 className="font-semibold text-red-700 text-sm mb-2 flex items-center gap-1">
+                                    <AlertCircle className="h-4 w-4" />
+                                    Challenges
+                                  </h4>
+                                  <ul className="space-y-1">
+                                    {interview.analysis.facilitatorInsights.challenges.map((item, idx) => (
+                                      <li key={idx} className="text-xs text-gray-700 pl-4 border-l-2 border-red-300">{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {interview.analysis.facilitatorInsights.strengths && interview.analysis.facilitatorInsights.strengths.length > 0 && (
+                                <div className="bg-white p-4 rounded-lg shadow-sm">
+                                  <h4 className="font-semibold text-green-700 text-sm mb-2 flex items-center gap-1">
+                                    <CheckCircle2 className="h-4 w-4" />
+                                    Strengths
+                                  </h4>
+                                  <ul className="space-y-1">
+                                    {interview.analysis.facilitatorInsights.strengths.map((item, idx) => (
+                                      <li key={idx} className="text-xs text-gray-700 pl-4 border-l-2 border-green-300">{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {interview.analysis.facilitatorInsights.supportNeeds && interview.analysis.facilitatorInsights.supportNeeds.length > 0 && (
+                                <div className="bg-white p-4 rounded-lg shadow-sm">
+                                  <h4 className="font-semibold text-blue-700 text-sm mb-2 flex items-center gap-1">
+                                    <Heart className="h-4 w-4" />
+                                    Support Needs
+                                  </h4>
+                                  <ul className="space-y-1">
+                                    {interview.analysis.facilitatorInsights.supportNeeds.map((item, idx) => (
+                                      <li key={idx} className="text-xs text-gray-700 pl-4 border-l-2 border-blue-300">{item}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {interview.analysis.facilitatorInsights.learningPreferences && (
+                                <div className="bg-white p-4 rounded-lg shadow-sm">
+                                  <h4 className="font-semibold text-purple-700 text-sm mb-2 flex items-center gap-1">
+                                    <Lightbulb className="h-4 w-4" />
+                                    Learning Preferences
+                                  </h4>
+                                  <p className="text-xs text-gray-700">{interview.analysis.facilitatorInsights.learningPreferences}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Platform Implications */}
+                        {interview.analysis.platformImplications && interview.analysis.platformImplications.length > 0 && (
+                          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-lg border border-indigo-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <Lightbulb className="h-5 w-5 text-indigo-600" />
+                              Platform Implications
+                            </h3>
+                            <div className="space-y-3">
+                              {interview.analysis.platformImplications.map((item, idx) => (
+                                <div key={idx} className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-l-indigo-400">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <h4 className="font-semibold text-gray-900 text-sm">{item.insight}</h4>
+                                    <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ml-2 ${
+                                      item.priority === 'Critical' ? 'bg-red-100 text-red-700' :
+                                      item.priority === 'High' ? 'bg-orange-100 text-orange-700' :
+                                      'bg-blue-100 text-blue-700'
+                                    }`}>
+                                      {item.priority}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-indigo-700 mb-2">
+                                    <span className="font-semibold">Feature:</span> {item.featureIdea}
+                                  </p>
+                                  <p className="text-xs text-gray-600">
+                                    <span className="font-semibold">Rationale:</span> {item.rationale}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Cultural Considerations */}
+                        {interview.analysis.culturalConsiderations && interview.analysis.culturalConsiderations.relevant && (
+                          <div className="bg-gradient-to-br from-pink-50 to-rose-50 p-6 rounded-lg border border-pink-200">
+                            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                              <Heart className="h-5 w-5 text-pink-600" />
+                              Cultural Considerations
+                            </h3>
+                            {interview.analysis.culturalConsiderations.insights && interview.analysis.culturalConsiderations.insights.length > 0 && (
+                              <div className="mb-4">
+                                <h4 className="font-semibold text-sm text-gray-700 mb-2">Insights:</h4>
+                                <ul className="space-y-2">
+                                  {interview.analysis.culturalConsiderations.insights.map((item, idx) => (
+                                    <li key={idx} className="text-sm text-gray-700 pl-4 border-l-2 border-pink-300">{item}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {interview.analysis.culturalConsiderations.recommendations && interview.analysis.culturalConsiderations.recommendations.length > 0 && (
+                              <div>
+                                <h4 className="font-semibold text-sm text-gray-700 mb-2">Recommendations:</h4>
+                                <ul className="space-y-2">
+                                  {interview.analysis.culturalConsiderations.recommendations.map((item, idx) => (
+                                    <li key={idx} className="text-sm text-gray-700 pl-4 border-l-2 border-pink-400 flex items-start gap-2">
+                                      <CheckCircle2 className="h-4 w-4 text-pink-600 mt-0.5 flex-shrink-0" />
+                                      <span>{item}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Analysis Timestamp */}
+                        <div className="text-center pt-4 border-t border-gray-200">
+                          <p className="text-xs text-gray-500">
+                            Analyzed on {new Date(interview.analysis.analyzedAt).toLocaleDateString('en-AU', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
                     ) : (() => {
+                      // Fallback for unanalyzed interviews - parse markdown
                       const sections = parseInterviewContent(expandedContent)
                       const hasStructuredContent = sections.summary || sections.keyQuotes.length > 0 || sections.keySentiments.length > 0
 

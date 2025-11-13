@@ -14,6 +14,49 @@ export interface Interview {
   summary?: string
   keyThemes?: string[]
   filename: string
+  analyzed: boolean
+  analysis?: {
+    executiveSummary: string
+    keyThemes: Array<{
+      theme: string
+      description: string
+      evidence: string[]
+      significance: string
+    }>
+    powerfulQuotes: Array<{
+      quote: string
+      context: string
+      significance: string
+    }>
+    learnWorldContentSuggestions: Array<{
+      courseTitle: string
+      description: string
+      targetAudience: string
+      format: string
+      rationale: string
+      keyLearningOutcomes: string[]
+      estimatedLength: string
+    }>
+    facilitatorInsights: {
+      challenges: string[]
+      strengths: string[]
+      supportNeeds: string[]
+      learningPreferences: string
+    }
+    platformImplications: Array<{
+      insight: string
+      featureIdea: string
+      priority: string
+      rationale: string
+    }>
+    culturalConsiderations: {
+      relevant: boolean
+      insights: string[]
+      recommendations: string[]
+    }
+    oneLineTakeaway: string
+    analyzedAt: string
+  }
 }
 
 export async function GET() {
@@ -52,11 +95,15 @@ export async function GET() {
       // Try to load AI analysis
       let summary = ''
       let keyThemes: string[] = []
+      let analyzed = false
+      let analysis = undefined
 
       try {
         const analysisFile = path.join(analysisPath, filename.replace('.md', '.json'))
         if (fs.existsSync(analysisFile)) {
           const analysisData = JSON.parse(fs.readFileSync(analysisFile, 'utf-8'))
+          analyzed = true
+          analysis = analysisData
 
           // Use the one-line takeaway as summary
           summary = analysisData.oneLineTakeaway || analysisData.executiveSummary || ''
@@ -87,7 +134,9 @@ export async function GET() {
         status: statusMatch ? statusMatch[1].trim() : undefined,
         summary,
         keyThemes,
-        filename
+        filename,
+        analyzed,
+        analysis
       }
     })
 
