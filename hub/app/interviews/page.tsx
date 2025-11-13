@@ -13,6 +13,7 @@ interface Interview {
   date?: string
   email?: string
   interviewDate?: string
+  interviewType?: 'smart_platform_review' | 'general'
   notes?: string
   affiliation?: string
   status?: string
@@ -69,6 +70,7 @@ export default function InterviewsPage() {
   const [filteredInterviews, setFilteredInterviews] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
+  const [interviewTypeFilter, setInterviewTypeFilter] = useState<'all' | 'smart_platform_review' | 'general'>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [expandedContent, setExpandedContent] = useState<string>('')
   const [loadingContent, setLoadingContent] = useState(false)
@@ -78,14 +80,22 @@ export default function InterviewsPage() {
   }, [])
 
   useEffect(() => {
-    // Filter interviews based on search query
-    const filtered = interviews.filter(interview =>
-      interview.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      interview.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      interview.affiliation?.toLowerCase().includes(searchQuery.toLowerCase())
-    )
+    // Filter interviews based on search query and interview type
+    const filtered = interviews.filter(interview => {
+      // Text search filter
+      const matchesSearch = searchQuery === '' ||
+        interview.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        interview.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        interview.affiliation?.toLowerCase().includes(searchQuery.toLowerCase())
+
+      // Interview type filter
+      const matchesType = interviewTypeFilter === 'all' ||
+        interview.interviewType === interviewTypeFilter
+
+      return matchesSearch && matchesType
+    })
     setFilteredInterviews(filtered)
-  }, [searchQuery, interviews])
+  }, [searchQuery, interviewTypeFilter, interviews])
 
   const fetchInterviews = async () => {
     try {
@@ -103,6 +113,8 @@ export default function InterviewsPage() {
   const analyzedCount = interviews.filter(i => i.analyzed).length
   const pendingCount = interviews.length - analyzedCount
   const completionPercentage = interviews.length > 0 ? Math.round((analyzedCount / interviews.length) * 100) : 0
+  const platformReviewCount = interviews.filter(i => i.interviewType === 'smart_platform_review').length
+  const generalCount = interviews.filter(i => i.interviewType === 'general').length
 
   const parseInterviewContent = (content: string) => {
     // Extract key sections from the interview
@@ -221,7 +233,7 @@ export default function InterviewsPage() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -231,6 +243,34 @@ export default function InterviewsPage() {
                   </div>
                   <div className="p-3 bg-blue-100 rounded-lg">
                     <FileText className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Platform Reviews</p>
+                    <p className="text-3xl font-bold text-[#00A5E0] mt-1">{platformReviewCount}</p>
+                  </div>
+                  <div className="p-3 bg-[#00A5E0]/10 rounded-lg">
+                    <BarChart3 className="h-6 w-6 text-[#00A5E0]" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">General</p>
+                    <p className="text-3xl font-bold text-[#FFD23F] mt-1">{generalCount}</p>
+                  </div>
+                  <div className="p-3 bg-[#FFD23F]/10 rounded-lg">
+                    <User className="h-6 w-6 text-[#FFD23F]" />
                   </div>
                 </div>
               </CardContent>
@@ -254,30 +294,53 @@ export default function InterviewsPage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Pending</p>
-                    <p className="text-3xl font-bold text-[#FFD23F] mt-1">{pendingCount}</p>
-                  </div>
-                  <div className="p-3 bg-[#FFD23F]/10 rounded-lg">
-                    <AlertCircle className="h-6 w-6 text-[#FFD23F]" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
                     <p className="text-sm font-medium text-gray-600">Completion</p>
                     <p className="text-3xl font-bold text-[#003B5C] mt-1">{completionPercentage}%</p>
                   </div>
                   <div className="p-3 bg-[#003B5C]/10 rounded-lg">
-                    <BarChart3 className="h-6 w-6 text-[#003B5C]" />
+                    <CheckCircle2 className="h-6 w-6 text-[#003B5C]" />
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+
+          {/* Filter Buttons */}
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-shrink-0">
+                  <p className="text-sm font-medium text-gray-700">Filter by Type:</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant={interviewTypeFilter === 'all' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setInterviewTypeFilter('all')}
+                    className={interviewTypeFilter === 'all' ? 'bg-[#003B5C] hover:bg-[#00527A]' : ''}
+                  >
+                    All Interviews ({interviews.length})
+                  </Button>
+                  <Button
+                    variant={interviewTypeFilter === 'smart_platform_review' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setInterviewTypeFilter('smart_platform_review')}
+                    className={interviewTypeFilter === 'smart_platform_review' ? 'bg-[#00A5E0] hover:bg-[#0088B8]' : ''}
+                  >
+                    Platform Reviews ({platformReviewCount})
+                  </Button>
+                  <Button
+                    variant={interviewTypeFilter === 'general' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setInterviewTypeFilter('general')}
+                    className={interviewTypeFilter === 'general' ? 'bg-[#FFD23F] hover:bg-[#E5BD38] text-gray-900' : ''}
+                  >
+                    General Interviews ({generalCount})
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Search Bar */}
@@ -340,10 +403,19 @@ export default function InterviewsPage() {
                           <User className="h-5 w-5 text-[#003B5C]" aria-hidden="true" />
                           {interview.name}
                         </CardTitle>
+                        {interview.interviewType && (
+                          <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                            interview.interviewType === 'smart_platform_review'
+                              ? 'bg-[#00A5E0]/10 text-[#00A5E0]'
+                              : 'bg-[#FFD23F]/10 text-[#FFD23F]'
+                          }`}>
+                            {interview.interviewType === 'smart_platform_review' ? 'Platform Review' : 'General'}
+                          </span>
+                        )}
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
                           interview.analyzed
                             ? 'bg-[#06D6A0]/10 text-[#06D6A0]'
-                            : 'bg-[#FFD23F]/10 text-[#FFD23F]'
+                            : 'bg-orange-100 text-orange-600'
                         }`}>
                           {interview.analyzed ? (
                             <span className="flex items-center gap-1">
