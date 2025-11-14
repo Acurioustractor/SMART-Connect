@@ -71,6 +71,7 @@ export default function InterviewsPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [interviewTypeFilter, setInterviewTypeFilter] = useState<'all' | 'smart_platform_review' | 'general'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'complete' | 'locked' | 'contacted'>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [expandedContent, setExpandedContent] = useState<string>('')
   const [loadingContent, setLoadingContent] = useState(false)
@@ -80,7 +81,7 @@ export default function InterviewsPage() {
   }, [])
 
   useEffect(() => {
-    // Filter interviews based on search query and interview type
+    // Filter interviews based on search query, interview type, and status
     const filtered = interviews.filter(interview => {
       // Text search filter
       const matchesSearch = searchQuery === '' ||
@@ -92,10 +93,25 @@ export default function InterviewsPage() {
       const matchesType = interviewTypeFilter === 'all' ||
         interview.interviewType === interviewTypeFilter
 
-      return matchesSearch && matchesType
+      // Status filter
+      let matchesStatus = true
+      if (statusFilter !== 'all' && interview.status) {
+        const status = interview.status.toLowerCase()
+        if (statusFilter === 'complete') {
+          matchesStatus = status.includes('complete')
+        } else if (statusFilter === 'locked') {
+          matchesStatus = status.includes('locked')
+        } else if (statusFilter === 'contacted') {
+          matchesStatus = status.includes('contacted')
+        }
+      } else if (statusFilter !== 'all' && !interview.status) {
+        matchesStatus = false
+      }
+
+      return matchesSearch && matchesType && matchesStatus
     })
     setFilteredInterviews(filtered)
-  }, [searchQuery, interviewTypeFilter, interviews])
+  }, [searchQuery, interviewTypeFilter, statusFilter, interviews])
 
   const fetchInterviews = async () => {
     try {
@@ -115,12 +131,19 @@ export default function InterviewsPage() {
   const completionPercentage = interviews.length > 0 ? Math.round((analyzedCount / interviews.length) * 100) : 0
   const platformReviewCount = interviews.filter(i => i.interviewType === 'smart_platform_review').length
   const generalCount = interviews.filter(i => i.interviewType === 'general').length
-  const transcriptCompleteCount = interviews.filter(i =>
-    i.status && (i.status.toLowerCase().includes('complete') || i.status.toLowerCase().includes('locked'))
+
+  // Break down by status
+  const interviewCompleteCount = interviews.filter(i =>
+    i.status && i.status.toLowerCase().includes('complete')
   ).length
-  const noTranscriptCount = interviews.filter(i =>
-    i.status && !i.status.toLowerCase().includes('complete') && !i.status.toLowerCase().includes('locked')
+  const interviewLockedCount = interviews.filter(i =>
+    i.status && i.status.toLowerCase().includes('locked')
   ).length
+  const contactedCount = interviews.filter(i =>
+    i.status && i.status.toLowerCase().includes('contacted')
+  ).length
+  const transcriptCompleteCount = interviewCompleteCount + interviewLockedCount
+  const noTranscriptCount = contactedCount
 
   const parseInterviewContent = (content: string) => {
     // Extract key sections from the interview
@@ -298,13 +321,27 @@ export default function InterviewsPage() {
           </div>
 
           {/* Stats Cards - Row 2 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Transcript Complete</p>
-                    <p className="text-3xl font-bold text-purple-700 mt-1">{transcriptCompleteCount}</p>
+                    <p className="text-sm font-medium text-gray-600">Interview Complete</p>
+                    <p className="text-3xl font-bold text-green-600 mt-1">{interviewCompleteCount}</p>
+                  </div>
+                  <div className="p-3 bg-green-100 rounded-lg">
+                    <CheckCircle2 className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Interview Locked</p>
+                    <p className="text-3xl font-bold text-purple-700 mt-1">{interviewLockedCount}</p>
                   </div>
                   <div className="p-3 bg-purple-100 rounded-lg">
                     <FileText className="h-6 w-6 text-purple-700" />
@@ -317,11 +354,11 @@ export default function InterviewsPage() {
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">No Transcript</p>
-                    <p className="text-3xl font-bold text-gray-600 mt-1">{noTranscriptCount}</p>
+                    <p className="text-sm font-medium text-gray-600">Contacted</p>
+                    <p className="text-3xl font-bold text-amber-600 mt-1">{contactedCount}</p>
                   </div>
-                  <div className="p-3 bg-gray-100 rounded-lg">
-                    <AlertCircle className="h-6 w-6 text-gray-600" />
+                  <div className="p-3 bg-amber-100 rounded-lg">
+                    <AlertCircle className="h-6 w-6 text-amber-600" />
                   </div>
                 </div>
               </CardContent>
@@ -345,35 +382,79 @@ export default function InterviewsPage() {
           {/* Filter Buttons */}
           <Card className="mb-6">
             <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                <div className="flex-shrink-0">
-                  <p className="text-sm font-medium text-gray-700">Filter by Type:</p>
+              <div className="space-y-4">
+                {/* Type Filter */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex-shrink-0">
+                    <p className="text-sm font-medium text-gray-700">Filter by Type:</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={interviewTypeFilter === 'all' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInterviewTypeFilter('all')}
+                      className={interviewTypeFilter === 'all' ? 'bg-[#003B5C] hover:bg-[#00527A]' : ''}
+                    >
+                      All Interviews ({interviews.length})
+                    </Button>
+                    <Button
+                      variant={interviewTypeFilter === 'smart_platform_review' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInterviewTypeFilter('smart_platform_review')}
+                      className={interviewTypeFilter === 'smart_platform_review' ? 'bg-[#00A5E0] hover:bg-[#0088B8]' : ''}
+                    >
+                      Platform Reviews ({platformReviewCount})
+                    </Button>
+                    <Button
+                      variant={interviewTypeFilter === 'general' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setInterviewTypeFilter('general')}
+                      className={interviewTypeFilter === 'general' ? 'bg-[#FFD23F] hover:bg-[#E5BD38] text-gray-900' : ''}
+                    >
+                      General Interviews ({generalCount})
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant={interviewTypeFilter === 'all' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setInterviewTypeFilter('all')}
-                    className={interviewTypeFilter === 'all' ? 'bg-[#003B5C] hover:bg-[#00527A]' : ''}
-                  >
-                    All Interviews ({interviews.length})
-                  </Button>
-                  <Button
-                    variant={interviewTypeFilter === 'smart_platform_review' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setInterviewTypeFilter('smart_platform_review')}
-                    className={interviewTypeFilter === 'smart_platform_review' ? 'bg-[#00A5E0] hover:bg-[#0088B8]' : ''}
-                  >
-                    Platform Reviews ({platformReviewCount})
-                  </Button>
-                  <Button
-                    variant={interviewTypeFilter === 'general' ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => setInterviewTypeFilter('general')}
-                    className={interviewTypeFilter === 'general' ? 'bg-[#FFD23F] hover:bg-[#E5BD38] text-gray-900' : ''}
-                  >
-                    General Interviews ({generalCount})
-                  </Button>
+
+                {/* Status Filter */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 pt-4 border-t border-gray-200">
+                  <div className="flex-shrink-0">
+                    <p className="text-sm font-medium text-gray-700">Filter by Status:</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={statusFilter === 'all' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('all')}
+                      className={statusFilter === 'all' ? 'bg-[#003B5C] hover:bg-[#00527A]' : ''}
+                    >
+                      All Statuses
+                    </Button>
+                    <Button
+                      variant={statusFilter === 'complete' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('complete')}
+                      className={statusFilter === 'complete' ? 'bg-green-600 hover:bg-green-700' : ''}
+                    >
+                      Interview Complete ({interviewCompleteCount})
+                    </Button>
+                    <Button
+                      variant={statusFilter === 'locked' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('locked')}
+                      className={statusFilter === 'locked' ? 'bg-purple-700 hover:bg-purple-800' : ''}
+                    >
+                      Interview Locked ({interviewLockedCount})
+                    </Button>
+                    <Button
+                      variant={statusFilter === 'contacted' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter('contacted')}
+                      className={statusFilter === 'contacted' ? 'bg-amber-600 hover:bg-amber-700' : ''}
+                    >
+                      Contacted ({contactedCount})
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -451,13 +532,15 @@ export default function InterviewsPage() {
                         )}
                         {interview.status && (
                           <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                            interview.status.toLowerCase().includes('complete') || interview.status.toLowerCase().includes('locked')
+                            interview.status.toLowerCase().includes('complete')
+                              ? 'bg-green-100 text-green-700'
+                              : interview.status.toLowerCase().includes('locked')
                               ? 'bg-purple-100 text-purple-700'
+                              : interview.status.toLowerCase().includes('contacted')
+                              ? 'bg-amber-100 text-amber-700'
                               : 'bg-gray-100 text-gray-600'
                           }`}>
-                            {interview.status.toLowerCase().includes('complete') || interview.status.toLowerCase().includes('locked')
-                              ? 'Transcript Complete'
-                              : 'No Transcript'}
+                            {interview.status}
                           </span>
                         )}
                         <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
