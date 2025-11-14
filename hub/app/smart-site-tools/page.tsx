@@ -4,13 +4,15 @@ import { useState, useEffect } from 'react'
 import {
   Search, Download, FileText, Loader2, Globe, Brain, MessageSquare, Send,
   ExternalLink, RefreshCw, Filter, BookOpen, List, Grid, ChevronDown,
-  X, Tag, Calendar, FileType
+  X, Tag, Calendar, FileType, ArrowLeft, Home
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
+import MarkdownRenderer, { type Heading } from '@/components/MarkdownRenderer'
+import TableOfContents from '@/components/TableOfContents'
 
 interface ContentItem {
   id: string
@@ -48,6 +50,8 @@ export default function SmartSiteToolsPage() {
   const [selectedType, setSelectedType] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
+  const [headings, setHeadings] = useState<Heading[]>([])
+  const [showFullContent, setShowFullContent] = useState(false)
 
   // AI Chat
   const [showChat, setShowChat] = useState(false)
@@ -255,6 +259,162 @@ export default function SmartSiteToolsPage() {
     }
   }
 
+  // If an item is selected and we want to show full content, render GitBook-style view
+  if (selectedItem && showFullContent) {
+    return (
+      <div className="min-h-screen bg-white">
+        {/* GitBook-style Header */}
+        <div className="bg-white border-b sticky top-0 z-20 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setShowFullContent(false); setSelectedItem(null) }}
+                  className="hover:bg-gray-100"
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Library
+                </Button>
+                <div className="h-6 w-px bg-gray-300" />
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Home className="h-3 w-3" />
+                  <span>/</span>
+                  {selectedItem.category && (
+                    <>
+                      <span className="text-gray-900">{selectedItem.category}</span>
+                      <span>/</span>
+                    </>
+                  )}
+                  <span className="text-gray-900 font-medium truncate max-w-md">{selectedItem.title}</span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(selectedItem.url, '_blank')}
+                >
+                  <ExternalLink className="h-3 w-3 mr-2" />
+                  View Original
+                </Button>
+                {selectedItem.type === 'pdf' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(selectedItem.url, '_blank')}
+                  >
+                    <Download className="h-3 w-3 mr-2" />
+                    Download PDF
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* GitBook-style Two-Column Layout */}
+        <div className="max-w-7xl mx-auto flex gap-6 px-6 py-8">
+          {/* Table of Contents Sidebar */}
+          {headings.length > 0 && (
+            <aside className="hidden lg:block w-64 flex-shrink-0">
+              <TableOfContents headings={headings} />
+            </aside>
+          )}
+
+          {/* Main Content Area */}
+          <main className="flex-1 min-w-0 max-w-4xl">
+            {/* Title and Metadata */}
+            <div className="mb-8">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">{selectedItem.title}</h1>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Badge variant="outline" className="flex items-center gap-1">
+                  {getTypeIcon(selectedItem.type)}
+                  {selectedItem.type.toUpperCase()}
+                </Badge>
+                {selectedItem.category && (
+                  <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                    {selectedItem.category}
+                  </Badge>
+                )}
+                {selectedItem.wordCount && selectedItem.wordCount > 0 && (
+                  <Badge variant="secondary">
+                    {selectedItem.wordCount.toLocaleString()} words
+                  </Badge>
+                )}
+                {selectedItem.pageCount && (
+                  <Badge variant="secondary">
+                    {selectedItem.pageCount} pages
+                  </Badge>
+                )}
+              </div>
+              {selectedItem.tags && selectedItem.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {selectedItem.tags.map((tag, idx) => (
+                    <Badge key={idx} variant="outline" className="text-xs">
+                      <Tag className="h-2.5 w-2.5 mr-1" />
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Rendered Content */}
+            {selectedItem.content && (
+              <div className="prose prose-lg max-w-none">
+                <MarkdownRenderer
+                  content={selectedItem.content}
+                  onHeadingsExtracted={setHeadings}
+                  className="leading-relaxed"
+                />
+              </div>
+            )}
+
+            {/* AI Analysis if available */}
+            {selectedItem.analysis && (
+              <div className="mt-8 bg-green-50 border-2 border-green-200 rounded-xl p-6">
+                <h3 className="font-bold text-lg text-gray-900 mb-3 flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-green-600" />
+                  AI Analysis
+                </h3>
+                <p className="text-gray-700 mb-4">{selectedItem.analysis.summary}</p>
+                {selectedItem.analysis.keyTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedItem.analysis.keyTopics.map((topic, idx) => (
+                      <Badge key={idx} className="bg-green-100 text-green-800 border-green-300">
+                        {topic}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Footer actions */}
+            <div className="mt-12 pt-6 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => { setShowFullContent(false); setSelectedItem(null) }}
+                >
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Library
+                </Button>
+                <Button onClick={() => window.open(selectedItem.url, '_blank')}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Original Source
+                </Button>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    )
+  }
+
+  // Default library view
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -389,7 +549,7 @@ export default function SmartSiteToolsPage() {
               <Card
                 key={item.id}
                 className="cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => setSelectedItem(item)}
+                onClick={() => { setSelectedItem(item); setShowFullContent(true) }}
               >
                 <CardHeader>
                   <div className="flex items-start gap-3">
@@ -415,10 +575,8 @@ export default function SmartSiteToolsPage() {
             {filteredContent.map((item) => (
               <Card
                 key={item.id}
-                className={`cursor-pointer hover:shadow-md transition-shadow ${
-                  selectedItem?.id === item.id ? 'ring-2 ring-blue-500' : ''
-                }`}
-                onClick={() => setSelectedItem(item)}
+                className="cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => { setSelectedItem(item); setShowFullContent(true) }}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center gap-4">
@@ -454,84 +612,6 @@ export default function SmartSiteToolsPage() {
               </Card>
             ))}
           </div>
-        )}
-
-        {/* Detail Panel */}
-        {selectedItem && (
-          <Card className="mt-6 border-2 border-blue-200">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-2xl">{selectedItem.title}</CardTitle>
-                  <CardDescription className="mt-2">
-                    <a
-                      href={selectedItem.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline flex items-center gap-1"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      {selectedItem.url}
-                    </a>
-                  </CardDescription>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setSelectedItem(null)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Badge variant="outline">{selectedItem.type}</Badge>
-                {selectedItem.category && <Badge>{selectedItem.category}</Badge>}
-                {selectedItem.wordCount && selectedItem.wordCount > 0 && (
-                  <Badge variant="secondary">{selectedItem.wordCount.toLocaleString()} words</Badge>
-                )}
-              </div>
-
-              {selectedItem.content && (
-                <div className="mt-4">
-                  <h4 className="font-semibold text-sm text-gray-900 mb-2">Content Preview</h4>
-                  <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border">
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                      {selectedItem.content.substring(0, 3000)}
-                      {selectedItem.content.length > 3000 && '...'}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {selectedItem.analysis && (
-                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                  <h4 className="font-semibold text-sm text-gray-900 mb-2 flex items-center gap-2">
-                    <Brain className="h-4 w-4 text-green-600" />
-                    AI Analysis
-                  </h4>
-                  <p className="text-sm text-gray-700 mb-3">{selectedItem.analysis.summary}</p>
-                  {selectedItem.analysis.keyTopics.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedItem.analysis.keyTopics.map((topic, idx) => (
-                        <Badge key={idx} variant="success">{topic}</Badge>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="mt-4 flex gap-2">
-                <Button onClick={() => window.open(selectedItem.url, '_blank')}>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  View Original
-                </Button>
-                {selectedItem.type === 'pdf' && (
-                  <Button variant="outline" onClick={() => window.open(selectedItem.url, '_blank')}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download PDF
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
         )}
       </div>
 
