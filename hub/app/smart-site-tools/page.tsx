@@ -51,6 +51,7 @@ export default function SmartSiteToolsPage() {
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showInsights, setShowInsights] = useState(false)
+  const [progressMessage, setProgressMessage] = useState<string>('')
 
   // Automatically load database content on mount
   useEffect(() => {
@@ -86,27 +87,116 @@ export default function SmartSiteToolsPage() {
     setError(null)
 
     try {
-      const response = await fetch('/api/smart-site/scrape', {
+      // Step 1: Start the crawl
+      const startResponse = await fetch('/api/content/scrape-full', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: 'https://smartrecoveryaustralia.com.au',
-          scrapeType: 'full-site',
-          includePDFs: true
+          action: 'start_crawl',
+          url: 'https://smartrecoveryaustralia.com.au'
         })
       })
 
-      if (!response.ok) {
-        throw new Error('Scraping failed')
+      if (!startResponse.ok) {
+        const errorData = await startResponse.json()
+        throw new Error(errorData.details || errorData.error || 'Failed to start crawl')
       }
 
-      const data = await response.json()
-      setScrapedContent(data.pages || [])
-      setPdfResources(data.pdfs || [])
+      const startData = await startResponse.json()
+      const jobId = startData.jobId
+
+      if (!jobId) {
+        throw new Error('No job ID returned from crawl')
+      }
+
+      // Step 2: Monitor crawl progress
+      let isComplete = false
+      let attempts = 0
+      const maxAttempts = 120 // 20 minutes with 10s intervals
+
+      while (!isComplete && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
+
+        const statusResponse = await fetch('/api/content/scrape-full', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'check_status',
+            jobId
+          })
+        })
+
+        if (statusResponse.ok) {
+          const statusData = await statusResponse.json()
+          isComplete = statusData.isComplete
+
+          // Update user with progress
+          if (statusData.completed && statusData.total) {
+            setProgressMessage(`Crawling website: ${statusData.completed}/${statusData.total} pages discovered`)
+          }
+        }
+
+        attempts++
+      }
+
+      if (!isComplete) {
+        throw new Error('Crawl timed out')
+      }
+
+      // Step 3: Start processing
+      const processResponse = await fetch('/api/content/scrape-full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'process_results',
+          jobId
+        })
+      })
+
+      if (!processResponse.ok) {
+        throw new Error('Failed to start processing')
+      }
+
+      // Step 4: Monitor processing
+      let isProcessed = false
+      attempts = 0
+
+      while (!isProcessed && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 10000)) // Wait 10 seconds
+
+        const procStatusResponse = await fetch('/api/content/scrape-full', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'check_processing',
+            jobId
+          })
+        })
+
+        if (procStatusResponse.ok) {
+          const procStatusData = await procStatusResponse.json()
+          isProcessed = procStatusData.isComplete
+
+          // Update user with progress
+          if (procStatusData.pagesProcessed && procStatusData.pagesScraped) {
+            setProgressMessage(`Processing content and generating embeddings: ${procStatusData.pagesProcessed}/${procStatusData.pagesScraped} pages`)
+          }
+        }
+
+        attempts++
+      }
+
+      // Load the results from database
+      setProgressMessage('Loading results from database...')
+      await loadFromDatabase()
       setScrapeStatus('completed')
+      setError(null)
+      setProgressMessage('')
+
     } catch (err: any) {
       setError(err.message || 'Failed to scrape site')
       setScrapeStatus('error')
+      setProgressMessage('')
     } finally {
       setLoading(false)
     }
@@ -268,9 +358,14 @@ export default function SmartSiteToolsPage() {
                     {scrapeStatus === 'completed' && `Successfully scraped ${scrapedContent.length} pages and ${pdfResources.length} PDFs`}
                     {scrapeStatus === 'error' && `Error: ${error}`}
                   </p>
+                  {scrapeStatus === 'scraping' && progressMessage && (
+                    <p className="text-sm text-blue-700 mt-1 font-medium">
+                      {progressMessage}
+                    </p>
+                  )}
                   {scrapeStatus === 'scraping' && (
                     <p className="text-sm text-gray-600 mt-1">
-                      This may take a few minutes. We're extracting all content and PDFs for analysis.
+                      This process includes: crawling pages, extracting PDFs, generating embeddings for semantic search, and storing in database. This may take 10-30 minutes depending on site size.
                     </p>
                   )}
                 </div>
