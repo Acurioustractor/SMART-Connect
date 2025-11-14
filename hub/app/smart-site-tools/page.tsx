@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import {
   Search, Download, FileText, Loader2, Globe, Brain, MessageSquare, Send,
-  ExternalLink, RefreshCw, BookOpen, ChevronRight, ChevronDown, Home, Menu, X, Tag
+  ExternalLink, RefreshCw, BookOpen, ChevronRight, ChevronDown, Home, Menu, X, Tag, Folder
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -135,30 +135,68 @@ export default function SmartSiteWiki() {
    * Clean and normalize page titles for better display
    */
   const cleanTitle = (title: string, url: string): string => {
+    // Extract meaningful title from URL if no title provided
     if (!title || title.trim() === '') {
-      // Extract from URL if no title
-      const urlObj = new URL(url)
-      const lastPart = urlObj.pathname.split('/').filter(Boolean).pop() || 'Home'
-      return formatSectionName(lastPart)
+      return extractTitleFromUrl(url)
     }
 
-    // Remove common suffixes/prefixes
+    // Remove common suffixes/prefixes and branding
     let cleaned = title
       .replace(/\s*[-|–]\s*SMART Recovery.*$/i, '')
       .replace(/^SMART Recovery\s*[-|–:]\s*/i, '')
       .replace(/\s*\|\s*Home\s*$/i, '')
       .replace(/\s*\|\s*SMART.*$/i, '')
       .replace(/\s*-\s*Home\s*$/i, '')
+      .replace(/\s*\|\s*$/i, '')
+      .replace(/\s*-\s*$/i, '')
       .trim()
 
-    // If title is now empty, extract from URL
-    if (!cleaned) {
-      const urlObj = new URL(url)
-      const lastPart = urlObj.pathname.split('/').filter(Boolean).pop() || 'Home'
-      return formatSectionName(lastPart)
+    // If title is now empty or just generic, extract from URL
+    if (!cleaned || cleaned.toLowerCase() === 'home') {
+      return extractTitleFromUrl(url)
     }
 
+    // Clean up common page patterns
+    cleaned = cleaned
+      .replace(/^(Page|Article|Post)\s*:\s*/i, '')
+      .replace(/\s*\(.*?\)\s*$/g, '') // Remove parentheticals
+      .trim()
+
     return cleaned
+  }
+
+  /**
+   * Extract a meaningful title from URL
+   */
+  const extractTitleFromUrl = (url: string): string => {
+    try {
+      const urlObj = new URL(url)
+      const pathParts = urlObj.pathname.split('/').filter(Boolean)
+
+      // Homepage
+      if (pathParts.length === 0) {
+        return 'Home'
+      }
+
+      // Use the last meaningful part of the path
+      const lastPart = pathParts[pathParts.length - 1]
+
+      // Handle common patterns
+      if (lastPart.match(/^\d+$/)) {
+        // If last part is just a number, use second-to-last + number
+        if (pathParts.length > 1) {
+          return formatSectionName(pathParts[pathParts.length - 2]) + ' #' + lastPart
+        }
+        return 'Page ' + lastPart
+      }
+
+      // Handle file extensions
+      const cleanedPart = lastPart.replace(/\.(html?|php|aspx?)$/i, '')
+
+      return formatSectionName(cleanedPart)
+    } catch (e) {
+      return 'Untitled Page'
+    }
   }
 
   /**
@@ -210,58 +248,155 @@ export default function SmartSiteWiki() {
   }
 
   const buildNavigationTree = (items: ContentItem[]): NavigationNode[] => {
-    const tree: Record<string, NavigationNode[]> = {}
-
     // Filter and process items
     const relevantItems = items.filter(isRelevantPage)
 
-    relevantItems.forEach(item => {
+    // Remove duplicates (same URL)
+    const uniqueItems = Array.from(
+      new Map(relevantItems.map(item => [item.url, item])).values()
+    )
+
+    // Build hierarchical tree
+    const rootNodes: Record<string, NavigationNode> = {}
+
+    uniqueItems.forEach(item => {
       try {
         const url = new URL(item.url)
         const pathParts = url.pathname.split('/').filter(Boolean)
+
+        // Get top-level section
         const section = pathParts[0] || 'home'
-
-        if (!tree[section]) {
-          tree[section] = []
-        }
-
         const cleanedTitle = cleanTitle(item.title, item.url)
 
-        tree[section].push({
-          id: item.id,
-          title: cleanedTitle,
-          url: item.url,
-          path: url.pathname,
-          children: [],
-          isExpanded: false,
-          item: {
-            ...item,
-            title: cleanedTitle  // Update item title too
+        // Create section node if it doesn't exist
+        if (!rootNodes[section]) {
+          rootNodes[section] = {
+            id: section,
+            title: formatSectionName(section),
+            url: '',
+            path: `/${section}`,
+            children: [],
+            isExpanded: true,
+            item: {} as ContentItem
           }
-        })
+        }
+
+        // For multi-level paths, create hierarchy
+        if (pathParts.length > 1) {
+          // Create parent nodes for nested paths
+          let currentLevel = rootNodes[section].children
+          for (let i = 1; i < pathParts.length - 1; i++) {
+            const parentPath = '/' + pathParts.slice(0, i + 1).join('/')
+            let parentNode = currentLevel.find(n => n.path === parentPath)
+
+            if (!parentNode) {
+              parentNode = {
+                id: parentPath,
+                title: formatSectionName(pathParts[i]),
+                url: '',
+                path: parentPath,
+                children: [],
+                isExpanded: false,
+                item: {} as ContentItem
+              }
+              currentLevel.push(parentNode)
+            }
+            currentLevel = parentNode.children
+          }
+
+          // Add the actual page node
+          currentLevel.push({
+            id: item.id,
+            title: cleanedTitle,
+            url: item.url,
+            path: url.pathname,
+            children: [],
+            isExpanded: false,
+            item: {
+              ...item,
+              title: cleanedTitle
+            }
+          })
+        } else {
+          // Top-level page in this section
+          rootNodes[section].children.push({
+            id: item.id,
+            title: cleanedTitle,
+            url: item.url,
+            path: url.pathname,
+            children: [],
+            isExpanded: false,
+            item: {
+              ...item,
+              title: cleanedTitle
+            }
+          })
+        }
       } catch (e) {
-        // Skip invalid URLs
+        console.error('Error processing item:', item.url, e)
       }
     })
 
-    // Convert to array and sort
-    return Object.entries(tree)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([section, nodes]) => ({
-        id: section,
-        title: formatSectionName(section),
-        url: '',
-        path: `/${section}`,
-        children: nodes.sort((a, b) => a.title.localeCompare(b.title)),
-        isExpanded: true,
-        item: {} as ContentItem
+    // Convert to array, sort, and clean up
+    const sortedTree = Object.values(rootNodes)
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .map(section => ({
+        ...section,
+        children: sortChildren(section.children)
       }))
+
+    return sortedTree
+  }
+
+  /**
+   * Recursively sort children and remove empty parent nodes
+   */
+  const sortChildren = (nodes: NavigationNode[]): NavigationNode[] => {
+    return nodes
+      .map(node => ({
+        ...node,
+        children: node.children.length > 0 ? sortChildren(node.children) : []
+      }))
+      .sort((a, b) => {
+        // Folders (nodes with children) first, then alphabetically
+        if (a.children.length > 0 && b.children.length === 0) return -1
+        if (a.children.length === 0 && b.children.length > 0) return 1
+        return a.title.localeCompare(b.title)
+      })
   }
 
   const formatSectionName = (section: string): string => {
+    // Handle common abbreviations and acronyms
+    const acronyms: Record<string, string> = {
+      'faq': 'FAQ',
+      'faqs': 'FAQs',
+      'pdf': 'PDF',
+      'pdfs': 'PDFs',
+      'api': 'API',
+      'url': 'URL',
+      'html': 'HTML',
+      'css': 'CSS',
+      'js': 'JavaScript',
+      'ts': 'TypeScript',
+    }
+
+    // Special case handling
+    if (acronyms[section.toLowerCase()]) {
+      return acronyms[section.toLowerCase()]
+    }
+
+    // Handle snake_case and kebab-case
     return section
+      .replace(/_/g, '-')  // Convert underscores to hyphens
       .split('-')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .map(word => {
+        // Check if whole word is an acronym
+        if (acronyms[word.toLowerCase()]) {
+          return acronyms[word.toLowerCase()]
+        }
+        // Capitalize first letter
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      })
       .join(' ')
   }
 
@@ -317,6 +452,7 @@ export default function SmartSiteWiki() {
   const renderNavigationNode = (node: NavigationNode, level: number = 0) => {
     const hasChildren = node.children.length > 0
     const isSection = level === 0
+    const isFolder = hasChildren && !isSection
 
     return (
       <div key={node.id} className="select-none">
@@ -326,6 +462,7 @@ export default function SmartSiteWiki() {
             hover:bg-gray-100 transition-colors
             ${selectedItem?.id === node.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}
             ${isSection ? 'font-semibold text-sm mt-2' : 'text-sm'}
+            ${isFolder ? 'font-medium' : ''}
           `}
           style={{ paddingLeft: `${level * 12 + 12}px` }}
           onClick={() => {
@@ -338,19 +475,26 @@ export default function SmartSiteWiki() {
           }}
         >
           {hasChildren && (
-            node.isExpanded ?
-              <ChevronDown className="h-4 w-4 flex-shrink-0" /> :
-              <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            <span className="flex-shrink-0">
+              {node.isExpanded ?
+                <ChevronDown className="h-4 w-4" /> :
+                <ChevronRight className="h-4 w-4" />}
+            </span>
+          )}
+          {isFolder && (
+            <Folder className={`h-3.5 w-3.5 flex-shrink-0 ${node.isExpanded ? 'text-blue-500' : 'text-gray-400'}`} />
           )}
           {!hasChildren && !isSection && (
             node.item.type === 'pdf' ?
               <FileText className="h-3.5 w-3.5 text-red-500 flex-shrink-0" /> :
               <Globe className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
           )}
-          <span className="truncate flex-1">{node.title}</span>
+          <span className="truncate flex-1" title={node.title}>{node.title}</span>
           {!hasChildren && node.item.wordCount && (
-            <span className="text-xs text-gray-400 flex-shrink-0">
-              {Math.round(node.item.wordCount / 100) / 10}k
+            <span className="text-xs text-gray-400 flex-shrink-0" title={`${node.item.wordCount} words`}>
+              {node.item.wordCount > 1000
+                ? `${Math.round(node.item.wordCount / 100) / 10}k`
+                : node.item.wordCount}
             </span>
           )}
         </div>
@@ -363,13 +507,32 @@ export default function SmartSiteWiki() {
     )
   }
 
+  /**
+   * Recursively filter tree nodes by search query
+   */
+  const filterTree = (nodes: NavigationNode[], query: string): NavigationNode[] => {
+    const lowerQuery = query.toLowerCase()
+
+    return nodes.map(node => {
+      const titleMatches = node.title.toLowerCase().includes(lowerQuery)
+      const filteredChildren = node.children.length > 0
+        ? filterTree(node.children, query)
+        : []
+
+      // Include node if title matches OR if any children match
+      if (titleMatches || filteredChildren.length > 0) {
+        return {
+          ...node,
+          children: filteredChildren,
+          isExpanded: filteredChildren.length > 0 ? true : node.isExpanded // Auto-expand if children match
+        }
+      }
+      return null
+    }).filter((node): node is NavigationNode => node !== null)
+  }
+
   const filteredTree = searchQuery
-    ? navigationTree.map(section => ({
-        ...section,
-        children: section.children.filter(node =>
-          node.title.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      })).filter(section => section.children.length > 0)
+    ? filterTree(navigationTree, searchQuery)
     : navigationTree
 
   if (loading) {
