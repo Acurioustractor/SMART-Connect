@@ -1,10 +1,10 @@
 # Nicole Dickenson (volunteer, regular portal user)
 
-Interview type: General
-
 Date: October 24, 2025
 Email: nixtacy@gmail.com
-Notes : Regular Portal User, currently co-facilitating a meeting 
+Interview date: October 24, 2025
+Interview type: SMART Platform Review
+Notes : Regular Portal User, currently co-facilitating a meeting
 SRAU Affiliation: Volunteer
 Status: Contacted
 

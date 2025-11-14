@@ -10,7 +10,7 @@
 
 Interviews are now tagged with one of two types for easier filtering and analysis:
 
-### SMART Platform Review Interviews (13)
+### SMART Platform Review Interviews (14)
 **Characteristics:** Structured interviews conducted on specific dates to gather feedback about the SMART platform
 **Identifier:** Have "Interview date:" field in metadata
 
@@ -23,12 +23,13 @@ Interviews are now tagged with one of two types for easier filtering and analysi
 - Louise Kelly (Oct 25, 2025)
 - Mark Powell, WRAD (Oct 24, 2025)
 - Mitch Robinson (Oct 29, 2025)
+- Nicole Dickenson (Oct 24, 2025)
 - Nigel Harpley (Oct 21, 2025)
 - Shaun Fisher (Oct 16, 2025)
 - Sonia Butler (Nov 19, 2025)
 - Vic Manning (Nov 14, 2025)
 
-### General Interviews (9)
+### General Interviews (8)
 **Characteristics:** General conversations, content gathering, and staff perspectives
 **Identifier:** No specific interview date field
 
@@ -36,7 +37,6 @@ Interviews are now tagged with one of two types for easier filtering and analysi
 - April Interview Content
 - Interview Chris Gimpel (SMART Stories)
 - Jen Webster
-- Nicole Dickenson (Volunteer)
 - Sanjit
 - Smart Partnership pt2
 - Stuart Fryers
@@ -87,6 +87,7 @@ Interviews are tracked by completion status to identify which have full transcri
 - **Jonathan Cornelius** [📄](../interviews/Jonathan%20Cornelius%20281ebcf981cf818b8efbc682da57b40b.md)
 - **Louise Kelly** [📄](../interviews/Louise%20Kelly%20281ebcf981cf816f9c21dbe84c551e0b.md)
 - **Mitch Robinson** [📄](../interviews/Mitch%20Robinson%20281ebcf981cf816c8041eda359f28653.md)
+- **Nicole Dickenson** [📄](../interviews/Nicole%20Dickenson%20(volunteer,%20regular%20portal%20user)%20281ebcf981cf81399633dbd64e33d8b6.md)
 - **Nigel Harpley** [📄](../interviews/Nigel%20Harpley%20281ebcf981cf81769682ee3a7c0d7e34.md)
 - **Shaun Fisher** [📄](../interviews/Shaun%20Fisher%20281ebcf981cf81ccada1e4209c21da8a.md)
 - **Sonia Butler** [📄](../interviews/Sonia%20Butler%20281ebcf981cf81d1b50fc74ed01838b6.md)
