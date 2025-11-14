@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize from 'rehype-sanitize'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 interface MarkdownRendererProps {
   content: string
@@ -20,8 +20,21 @@ export interface Heading {
 
 export default function MarkdownRenderer({ content, className = '', onHeadingsExtracted }: MarkdownRendererProps) {
   const [headings, setHeadings] = useState<Heading[]>([])
+  const headingCounterRef = useRef<Map<string, number>>(new Map())
+
+  // Generate unique ID for a heading
+  const generateUniqueId = (text: string) => {
+    const baseId = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const count = headingCounterRef.current.get(baseId) || 0
+    headingCounterRef.current.set(baseId, count + 1)
+
+    return count === 0 ? baseId : `${baseId}-${count + 1}`
+  }
 
   useEffect(() => {
+    // Reset counter on content change
+    headingCounterRef.current = new Map()
+
     // Extract headings from markdown content
     const extractedHeadings: Heading[] = []
     const lines = content.split('\n')
@@ -31,7 +44,7 @@ export default function MarkdownRenderer({ content, className = '', onHeadingsEx
       if (match) {
         const level = match[1].length
         const text = match[2].trim()
-        const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+        const id = generateUniqueId(text)
         extractedHeadings.push({ id, text, level })
       }
     }
@@ -42,16 +55,21 @@ export default function MarkdownRenderer({ content, className = '', onHeadingsEx
     }
   }, [content, onHeadingsExtracted])
 
-  // Add IDs to headings for anchor links
-  const processedContent = content.split('\n').map(line => {
-    const match = line.match(/^(#{1,6})\s+(.+)$/)
-    if (match) {
-      const text = match[2].trim()
-      const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-      return `${match[1]} ${text} {#${id}}`
-    }
-    return line
-  }).join('\n')
+  // Create ID map for rendering (needs to match extraction order)
+  const renderCounterRef = useRef<Map<string, number>>(new Map())
+
+  // Helper to get next unique ID during rendering
+  const getNextId = (text: string) => {
+    const baseId = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const count = renderCounterRef.current.get(baseId) || 0
+    renderCounterRef.current.set(baseId, count + 1)
+    return count === 0 ? baseId : `${baseId}-${count + 1}`
+  }
+
+  // Reset render counter when content changes
+  useEffect(() => {
+    renderCounterRef.current = new Map()
+  }, [content])
 
   return (
     <div className={`markdown-content ${className}`}>
@@ -61,32 +79,32 @@ export default function MarkdownRenderer({ content, className = '', onHeadingsEx
         components={{
           h1: ({ node, ...props }) => {
             const text = props.children?.toString() || ''
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            const id = getNextId(text)
             return <h1 id={id} className="text-3xl font-bold text-gray-900 mb-4 mt-8 first:mt-0 pb-2 border-b-2 border-gray-200" {...props} />
           },
           h2: ({ node, ...props }) => {
             const text = props.children?.toString() || ''
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            const id = getNextId(text)
             return <h2 id={id} className="text-2xl font-bold text-gray-900 mb-3 mt-6 pb-1 border-b border-gray-200" {...props} />
           },
           h3: ({ node, ...props }) => {
             const text = props.children?.toString() || ''
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            const id = getNextId(text)
             return <h3 id={id} className="text-xl font-semibold text-gray-900 mb-2 mt-5" {...props} />
           },
           h4: ({ node, ...props }) => {
             const text = props.children?.toString() || ''
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            const id = getNextId(text)
             return <h4 id={id} className="text-lg font-semibold text-gray-900 mb-2 mt-4" {...props} />
           },
           h5: ({ node, ...props }) => {
             const text = props.children?.toString() || ''
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            const id = getNextId(text)
             return <h5 id={id} className="text-base font-semibold text-gray-800 mb-1 mt-3" {...props} />
           },
           h6: ({ node, ...props }) => {
             const text = props.children?.toString() || ''
-            const id = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+            const id = getNextId(text)
             return <h6 id={id} className="text-sm font-semibold text-gray-800 mb-1 mt-3" {...props} />
           },
           p: ({ node, ...props }) => <p className="text-gray-700 mb-4 leading-7" {...props} />,
