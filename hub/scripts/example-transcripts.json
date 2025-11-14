@@ -1,0 +1,12 @@
+[
+  {
+    "name": "Vic Manning",
+    "transcript": "Paste the full transcript text here...\n\nThe script will automatically format it and add it to the interview file.",
+    "status": "Interview complete"
+  },
+  {
+    "name": "Nicole Dickenson",
+    "transcript": "Another transcript here...",
+    "status": "Interview complete"
+  }
+]

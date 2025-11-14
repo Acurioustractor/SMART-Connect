@@ -9,7 +9,8 @@
     "lint": "next lint",
     "apply-content-schema": "tsx scripts/apply-content-schema.ts",
     "scrape-smart-site": "tsx scripts/scrape-smart-site.ts",
-    "migrate-to-supabase": "tsx scripts/migrate-to-supabase.ts"
+    "migrate-to-supabase": "tsx scripts/migrate-to-supabase.ts",
+    "update-transcript": "tsx scripts/update-transcripts.ts"
   },
   "dependencies": {
     "@mendable/firecrawl-js": "^4.5.0",
