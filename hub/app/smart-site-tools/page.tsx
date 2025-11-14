@@ -140,27 +140,16 @@ export default function SmartSiteWiki() {
       return extractTitleFromUrl(url)
     }
 
-    // Remove common suffixes/prefixes and branding
+    // Only remove obvious branding - keep the actual page title
     let cleaned = title
       .replace(/\s*[-|–]\s*SMART Recovery.*$/i, '')
       .replace(/^SMART Recovery\s*[-|–:]\s*/i, '')
-      .replace(/\s*\|\s*Home\s*$/i, '')
-      .replace(/\s*\|\s*SMART.*$/i, '')
-      .replace(/\s*-\s*Home\s*$/i, '')
-      .replace(/\s*\|\s*$/i, '')
-      .replace(/\s*-\s*$/i, '')
       .trim()
 
-    // If title is now empty or just generic, extract from URL
-    if (!cleaned || cleaned.toLowerCase() === 'home') {
+    // If title is now empty, extract from URL
+    if (!cleaned) {
       return extractTitleFromUrl(url)
     }
-
-    // Clean up common page patterns
-    cleaned = cleaned
-      .replace(/^(Page|Article|Post)\s*:\s*/i, '')
-      .replace(/\s*\(.*?\)\s*$/g, '') // Remove parentheticals
-      .trim()
 
     return cleaned
   }
@@ -468,9 +457,10 @@ export default function SmartSiteWiki() {
           onClick={() => {
             if (hasChildren) {
               toggleNode(node.id)
-            } else if (node.item.content) {
+            } else if (node.url && node.item?.id) {
               setSelectedItem(node.item)
               setMobileSidebarOpen(false)
+              loadRelatedContent(node.item.id)
             }
           }}
         >
@@ -834,12 +824,26 @@ export default function SmartSiteWiki() {
                     )}
                   </div>
 
-                  {selectedItem.content && (
+                  {selectedItem.content ? (
                     <div className="prose prose-lg max-w-none">
                       <MarkdownRenderer
                         content={selectedItem.content}
                         onHeadingsExtracted={setHeadings}
                       />
+                    </div>
+                  ) : (
+                    <div className="text-gray-500 py-8">
+                      <p>No content available for this item.</p>
+                      <p className="mt-2">
+                        <a
+                          href={selectedItem.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline inline-flex items-center gap-1"
+                        >
+                          View original source <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </p>
                     </div>
                   )}
 

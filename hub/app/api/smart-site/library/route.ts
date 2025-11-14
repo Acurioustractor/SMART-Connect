@@ -80,6 +80,8 @@ export async function GET(req: Request) {
         title: pdf.title,
         url: pdf.url,
         type: 'pdf' as const,
+        content: pdf.markdown || pdf.content_text || '',
+        wordCount: pdf.word_count,
         description: `${pdf.category || 'PDF Document'} - ${pdf.page_count || 0} pages`,
         category: pdf.category,
         downloadedAt: pdf.created_at,
