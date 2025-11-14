@@ -3,14 +3,12 @@
 import { useState, useEffect } from 'react'
 import {
   Search, Download, FileText, Loader2, Globe, Brain, MessageSquare, Send,
-  ExternalLink, RefreshCw, Filter, BookOpen, List, Grid, ChevronDown,
-  X, Tag, Calendar, FileType, ArrowLeft, Home
+  ExternalLink, RefreshCw, BookOpen, ChevronRight, ChevronDown, Home, Menu, X, Tag
 } from 'lucide-react'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Select } from '@/components/ui/select'
 import MarkdownRenderer, { type Heading } from '@/components/MarkdownRenderer'
 import TableOfContents from '@/components/TableOfContents'
 
@@ -20,18 +18,20 @@ interface ContentItem {
   title: string
   type: 'page' | 'pdf' | 'document' | 'article'
   content?: string
-  scrapedAt?: string
   wordCount?: number | null
   category?: string
   tags?: string[]
   pageCount?: number
-  metadata?: any
-  analysis?: {
-    summary: string
-    keyTopics: string[]
-    relevantForFacilitators: boolean
-    contentType: string
-  }
+}
+
+interface NavigationNode {
+  id: string
+  title: string
+  url: string
+  path: string
+  children: NavigationNode[]
+  isExpanded: boolean
+  item: ContentItem
 }
 
 interface ChatMessage {
@@ -40,18 +40,15 @@ interface ChatMessage {
   sources?: Array<{ id: string; title: string; url: string }>
 }
 
-export default function SmartSiteToolsPage() {
+export default function SmartSiteWiki() {
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState<ContentItem[]>([])
-  const [filteredContent, setFilteredContent] = useState<ContentItem[]>([])
+  const [navigationTree, setNavigationTree] = useState<NavigationNode[]>([])
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [selectedType, setSelectedType] = useState<string>('all')
-  const [error, setError] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
   const [headings, setHeadings] = useState<Heading[]>([])
-  const [showFullContent, setShowFullContent] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
   // AI Chat
   const [showChat, setShowChat] = useState(false)
@@ -59,154 +56,115 @@ export default function SmartSiteToolsPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
 
-  // Categories and types
-  const categories = ['all', ...Array.from(new Set(content.map(c => c.category).filter(Boolean)))].sort()
-  const types = ['all', 'page', 'pdf', 'article']
-
-  // Stats
-  const stats = {
-    totalPages: content.filter(c => c.type !== 'pdf').length,
-    totalPDFs: content.filter(c => c.type === 'pdf').length,
-    totalWords: content.reduce((sum, c) => sum + (c.wordCount || 0), 0)
-  }
+  // Related content
+  const [relatedContent, setRelatedContent] = useState<ContentItem[]>([])
 
   useEffect(() => {
     loadFromDatabase()
   }, [])
 
   useEffect(() => {
-    applyFilters()
-  }, [content, searchQuery, selectedCategory, selectedType])
+    if (selectedItem) {
+      loadRelatedContent(selectedItem.id)
+    }
+  }, [selectedItem])
 
   const loadFromDatabase = async () => {
     setLoading(true)
-    setError(null)
-
     try {
       const response = await fetch('/api/smart-site/library?includeInsights=false')
       const data = await response.json()
 
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to load from database')
-      }
+      if (data.success && data.resources) {
+        setContent(data.resources)
+        const tree = buildNavigationTree(data.resources)
+        setNavigationTree(tree)
 
-      // Clean and enhance content
-      const cleaned = cleanupContent(data.resources || [])
-      setContent(cleaned)
-
-      // Auto-select first item with content
-      if (cleaned.length > 0) {
-        const firstWithContent = cleaned.find(c => c.content || c.wordCount)
-        if (firstWithContent) {
-          setSelectedItem(firstWithContent)
+        // Auto-select first item
+        if (data.resources.length > 0) {
+          setSelectedItem(data.resources[0])
         }
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to load from database')
+    } catch (error) {
+      console.error('Failed to load content:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const cleanupContent = (items: ContentItem[]): ContentItem[] => {
-    const seen = new Set<string>()
-    const cleaned: ContentItem[] = []
-
-    for (const item of items) {
-      // Skip invalid URLs
-      if (!item.url || item.url.includes('undefined') || item.url.includes('null')) {
-        continue
+  const loadRelatedContent = async (contentId: string) => {
+    try {
+      const response = await fetch(`/api/smart-site/related?contentId=${contentId}&limit=5`)
+      const data = await response.json()
+      if (data.success && data.related) {
+        setRelatedContent(data.related)
       }
+    } catch (error) {
+      console.error('Failed to load related content:', error)
+    }
+  }
 
-      // Deduplicate by URL
-      if (seen.has(item.url)) {
-        continue
+  const buildNavigationTree = (items: ContentItem[]): NavigationNode[] => {
+    const tree: Record<string, NavigationNode[]> = {}
+
+    items.forEach(item => {
+      try {
+        const url = new URL(item.url)
+        const pathParts = url.pathname.split('/').filter(Boolean)
+        const section = pathParts[0] || 'home'
+
+        if (!tree[section]) {
+          tree[section] = []
+        }
+
+        tree[section].push({
+          id: item.id,
+          title: item.title,
+          url: item.url,
+          path: url.pathname,
+          children: [],
+          isExpanded: false,
+          item
+        })
+      } catch (e) {
+        // Skip invalid URLs
       }
-      seen.add(item.url)
+    })
 
-      // Fix title
-      let betterTitle = item.title
+    // Convert to array and sort
+    return Object.entries(tree)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([section, nodes]) => ({
+        id: section,
+        title: formatSectionName(section),
+        url: '',
+        path: `/${section}`,
+        children: nodes.sort((a, b) => a.title.localeCompare(b.title)),
+        isExpanded: true,
+        item: {} as ContentItem
+      }))
+  }
 
-      // If title is bad, extract from URL
-      if (!betterTitle || betterTitle === 'Hubfs' || betterTitle.match(/^\d+$/) || betterTitle.length < 3) {
-        betterTitle = extractTitleFromUrl(item.url)
-      }
+  const formatSectionName = (section: string): string => {
+    return section
+      .split('-')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+  }
 
-      // Clean up title
-      betterTitle = betterTitle
-        .replace(/\|.*$/, '') // Remove site suffix
-        .replace(/SMART Recovery Australia/gi, '')
-        .trim()
-
-      if (!betterTitle) {
-        betterTitle = 'Untitled'
-      }
-
-      cleaned.push({
-        ...item,
-        title: betterTitle
+  const toggleNode = (nodeId: string) => {
+    const updateTree = (nodes: NavigationNode[]): NavigationNode[] => {
+      return nodes.map(node => {
+        if (node.id === nodeId) {
+          return { ...node, isExpanded: !node.isExpanded }
+        }
+        if (node.children.length > 0) {
+          return { ...node, children: updateTree(node.children) }
+        }
+        return node
       })
     }
-
-    // Sort by title
-    return cleaned.sort((a, b) => a.title.localeCompare(b.title))
-  }
-
-  const extractTitleFromUrl = (url: string): string => {
-    try {
-      const urlObj = new URL(url)
-      const pathname = urlObj.pathname
-
-      // Get path segments
-      const segments = pathname.split('/').filter(Boolean)
-      if (segments.length === 0) return 'Home'
-
-      // Get last meaningful segment
-      const lastSegment = segments[segments.length - 1]
-
-      // Remove file extensions
-      const withoutExt = lastSegment.replace(/\.(html|php|pdf|aspx?)$/i, '')
-
-      // Decode URL encoding
-      const decoded = decodeURIComponent(withoutExt)
-
-      // Format: replace dashes/underscores with spaces, title case
-      const formatted = decoded
-        .replace(/[-_]/g, ' ')
-        .replace(/\b\w/g, c => c.toUpperCase())
-        .replace(/\s+/g, ' ')
-        .trim()
-
-      return formatted || 'Page'
-    } catch {
-      return 'Page'
-    }
-  }
-
-  const applyFilters = () => {
-    let filtered = [...content]
-
-    // Category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(item => item.category === selectedCategory)
-    }
-
-    // Type filter
-    if (selectedType !== 'all') {
-      filtered = filtered.filter(item => item.type === selectedType)
-    }
-
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(item =>
-        item.title.toLowerCase().includes(query) ||
-        item.content?.toLowerCase().includes(query) ||
-        item.category?.toLowerCase().includes(query)
-      )
-    }
-
-    setFilteredContent(filtered)
+    setNavigationTree(updateTree(navigationTree))
   }
 
   const sendChatMessage = async () => {
@@ -243,41 +201,177 @@ export default function SmartSiteToolsPage() {
     }
   }
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'pdf': return <FileText className="h-4 w-4 text-red-500" />
-      case 'article': return <FileType className="h-4 w-4 text-purple-500" />
-      default: return <Globe className="h-4 w-4 text-blue-500" />
-    }
-  }
+  const renderNavigationNode = (node: NavigationNode, level: number = 0) => {
+    const hasChildren = node.children.length > 0
+    const isSection = level === 0
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'pdf': return 'bg-red-50 border-red-200 text-red-700'
-      case 'article': return 'bg-purple-50 border-purple-200 text-purple-700'
-      default: return 'bg-blue-50 border-blue-200 text-blue-700'
-    }
-  }
-
-  // If an item is selected and we want to show full content, render GitBook-style view
-  if (selectedItem && showFullContent) {
     return (
-      <div className="min-h-screen bg-white">
-        {/* GitBook-style Header */}
+      <div key={node.id} className="select-none">
+        <div
+          className={`
+            flex items-center gap-2 px-3 py-1.5 cursor-pointer rounded-lg
+            hover:bg-gray-100 transition-colors
+            ${selectedItem?.id === node.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-700'}
+            ${isSection ? 'font-semibold text-sm mt-2' : 'text-sm'}
+          `}
+          style={{ paddingLeft: `${level * 12 + 12}px` }}
+          onClick={() => {
+            if (hasChildren) {
+              toggleNode(node.id)
+            } else if (node.item.content) {
+              setSelectedItem(node.item)
+              setMobileSidebarOpen(false)
+            }
+          }}
+        >
+          {hasChildren && (
+            node.isExpanded ?
+              <ChevronDown className="h-4 w-4 flex-shrink-0" /> :
+              <ChevronRight className="h-4 w-4 flex-shrink-0" />
+          )}
+          {!hasChildren && !isSection && (
+            node.item.type === 'pdf' ?
+              <FileText className="h-3.5 w-3.5 text-red-500 flex-shrink-0" /> :
+              <Globe className="h-3.5 w-3.5 text-blue-500 flex-shrink-0" />
+          )}
+          <span className="truncate flex-1">{node.title}</span>
+          {!hasChildren && node.item.wordCount && (
+            <span className="text-xs text-gray-400 flex-shrink-0">
+              {Math.round(node.item.wordCount / 100) / 10}k
+            </span>
+          )}
+        </div>
+        {hasChildren && node.isExpanded && (
+          <div>
+            {node.children.map(child => renderNavigationNode(child, level + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const filteredTree = searchQuery
+    ? navigationTree.map(section => ({
+        ...section,
+        children: section.children.filter(node =>
+          node.title.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      })).filter(section => section.children.length > 0)
+    : navigationTree
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-white flex">
+      {/* Sidebar Navigation */}
+      <aside className={`
+        ${sidebarOpen ? 'w-80' : 'w-0'}
+        hidden lg:block flex-shrink-0 border-r bg-gray-50 overflow-hidden transition-all duration-300
+      `}>
+        <div className="h-full flex flex-col">
+          {/* Sidebar Header */}
+          <div className="p-4 border-b bg-white sticky top-0 z-10">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-[#003B5C]" />
+                <h2 className="font-bold text-gray-900">SMART Wiki</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 text-sm"
+              />
+            </div>
+          </div>
+
+          {/* Navigation Tree */}
+          <div className="flex-1 overflow-y-auto p-2">
+            {filteredTree.map(node => renderNavigationNode(node))}
+          </div>
+        </div>
+      </aside>
+
+      {/* Mobile Sidebar */}
+      {mobileSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-black/50" onClick={() => setMobileSidebarOpen(false)}>
+          <aside className="w-80 h-full bg-gray-50 border-r" onClick={(e) => e.stopPropagation()}>
+            <div className="h-full flex flex-col">
+              <div className="p-4 border-b bg-white">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-5 w-5 text-[#003B5C]" />
+                    <h2 className="font-bold text-gray-900">SMART Wiki</h2>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileSidebarOpen(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-2">
+                {filteredTree.map(node => renderNavigationNode(node))}
+              </div>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col min-w-0">
+        {/* Top Bar */}
         <div className="bg-white border-b sticky top-0 z-20 shadow-sm">
-          <div className="max-w-7xl mx-auto px-6 py-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+          <div className="px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {!sidebarOpen && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setShowFullContent(false); setSelectedItem(null) }}
-                  className="hover:bg-gray-100"
+                  onClick={() => setSidebarOpen(true)}
+                  className="hidden lg:flex"
                 >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Library
+                  <Menu className="h-4 w-4" />
                 </Button>
-                <div className="h-6 w-px bg-gray-300" />
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setMobileSidebarOpen(true)}
+                className="lg:hidden"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+              {selectedItem && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Home className="h-3 w-3" />
                   <span>/</span>
@@ -287,148 +381,11 @@ export default function SmartSiteToolsPage() {
                       <span>/</span>
                     </>
                   )}
-                  <span className="text-gray-900 font-medium truncate max-w-md">{selectedItem.title}</span>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(selectedItem.url, '_blank')}
-                >
-                  <ExternalLink className="h-3 w-3 mr-2" />
-                  View Original
-                </Button>
-                {selectedItem.type === 'pdf' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open(selectedItem.url, '_blank')}
-                  >
-                    <Download className="h-3 w-3 mr-2" />
-                    Download PDF
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* GitBook-style Two-Column Layout */}
-        <div className="max-w-7xl mx-auto flex gap-6 px-6 py-8">
-          {/* Table of Contents Sidebar */}
-          {headings.length > 0 && (
-            <aside className="hidden lg:block w-64 flex-shrink-0">
-              <TableOfContents headings={headings} />
-            </aside>
-          )}
-
-          {/* Main Content Area */}
-          <main className="flex-1 min-w-0 max-w-4xl">
-            {/* Title and Metadata */}
-            <div className="mb-8">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">{selectedItem.title}</h1>
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Badge variant="outline" className="flex items-center gap-1">
-                  {getTypeIcon(selectedItem.type)}
-                  {selectedItem.type.toUpperCase()}
-                </Badge>
-                {selectedItem.category && (
-                  <Badge className="bg-blue-100 text-blue-800 border-blue-200">
-                    {selectedItem.category}
-                  </Badge>
-                )}
-                {selectedItem.wordCount && selectedItem.wordCount > 0 && (
-                  <Badge variant="secondary">
-                    {selectedItem.wordCount.toLocaleString()} words
-                  </Badge>
-                )}
-                {selectedItem.pageCount && (
-                  <Badge variant="secondary">
-                    {selectedItem.pageCount} pages
-                  </Badge>
-                )}
-              </div>
-              {selectedItem.tags && selectedItem.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {selectedItem.tags.map((tag, idx) => (
-                    <Badge key={idx} variant="outline" className="text-xs">
-                      <Tag className="h-2.5 w-2.5 mr-1" />
-                      {tag}
-                    </Badge>
-                  ))}
+                  <span className="text-gray-900 font-medium truncate max-w-md">
+                    {selectedItem.title}
+                  </span>
                 </div>
               )}
-            </div>
-
-            {/* Rendered Content */}
-            {selectedItem.content && (
-              <div className="prose prose-lg max-w-none">
-                <MarkdownRenderer
-                  content={selectedItem.content}
-                  onHeadingsExtracted={setHeadings}
-                  className="leading-relaxed"
-                />
-              </div>
-            )}
-
-            {/* AI Analysis if available */}
-            {selectedItem.analysis && (
-              <div className="mt-8 bg-green-50 border-2 border-green-200 rounded-xl p-6">
-                <h3 className="font-bold text-lg text-gray-900 mb-3 flex items-center gap-2">
-                  <Brain className="h-5 w-5 text-green-600" />
-                  AI Analysis
-                </h3>
-                <p className="text-gray-700 mb-4">{selectedItem.analysis.summary}</p>
-                {selectedItem.analysis.keyTopics.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedItem.analysis.keyTopics.map((topic, idx) => (
-                      <Badge key={idx} className="bg-green-100 text-green-800 border-green-300">
-                        {topic}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Footer actions */}
-            <div className="mt-12 pt-6 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() => { setShowFullContent(false); setSelectedItem(null) }}
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Library
-                </Button>
-                <Button onClick={() => window.open(selectedItem.url, '_blank')}>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  View Original Source
-                </Button>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    )
-  }
-
-  // Default library view
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <BookOpen className="h-8 w-8 text-[#003B5C]" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">SMART Content Library</h1>
-                <p className="text-sm text-gray-600">
-                  {filteredContent.length} of {content.length} resources
-                </p>
-              </div>
             </div>
             <div className="flex gap-2">
               <Button
@@ -440,180 +397,133 @@ export default function SmartSiteToolsPage() {
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Ask AI
               </Button>
-              <Button onClick={loadFromDatabase} disabled={loading} variant="outline" size="sm">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                Refresh
+              <Button onClick={loadFromDatabase} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-600">Web Pages</p>
-                  <p className="text-xl font-bold text-[#003B5C]">{stats.totalPages}</p>
-                </div>
-                <Globe className="h-6 w-6 text-blue-500 opacity-50" />
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-red-50 to-white border border-red-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-600">PDF Resources</p>
-                  <p className="text-xl font-bold text-[#003B5C]">{stats.totalPDFs}</p>
-                </div>
-                <FileText className="h-6 w-6 text-red-500 opacity-50" />
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-white border border-green-200 rounded-lg p-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-gray-600">Total Words</p>
-                  <p className="text-xl font-bold text-[#003B5C]">{Math.round(stats.totalWords / 1000)}K</p>
-                </div>
-                <BookOpen className="h-6 w-6 text-green-500 opacity-50" />
-              </div>
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div className="flex gap-3 items-center">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Search content..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              options={types.map(t => ({ value: t, label: t === 'all' ? 'All Types' : t.toUpperCase() }))}
-              className="w-36"
-            />
-            <Select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              options={categories.map(c => ({ value: c, label: c === 'all' ? 'All Categories' : c }))}
-              className="w-48"
-            />
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-6 py-6">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-          </div>
-        ) : error ? (
-          <Card className="border-red-200 bg-red-50">
-            <CardContent className="py-8 text-center">
-              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
-              <p className="text-red-700">{error}</p>
-            </CardContent>
-          </Card>
-        ) : filteredContent.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <Search className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600">No content found</p>
-              <Button variant="outline" onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedType('all') }} className="mt-4">
-                Clear Filters
-              </Button>
-            </CardContent>
-          </Card>
-        ) : viewMode === 'grid' ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredContent.map((item) => (
-              <Card
-                key={item.id}
-                className="cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => { setSelectedItem(item); setShowFullContent(true) }}
-              >
-                <CardHeader>
-                  <div className="flex items-start gap-3">
-                    {getTypeIcon(item.type)}
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base line-clamp-2">{item.title}</CardTitle>
-                      <CardDescription className="mt-1">
-                        {item.wordCount ? `${item.wordCount.toLocaleString()} words` : item.type}
-                      </CardDescription>
-                    </div>
+        {/* Content Area with TOC */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto flex gap-6 px-6 py-8">
+            {/* Main Article */}
+            <article className="flex-1 min-w-0 max-w-4xl">
+              {selectedItem ? (
+                <>
+                  <h1 className="text-4xl font-bold text-gray-900 mb-4">{selectedItem.title}</h1>
+
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      {selectedItem.type === 'pdf' ? (
+                        <FileText className="h-3 w-3 text-red-500" />
+                      ) : (
+                        <Globe className="h-3 w-3 text-blue-500" />
+                      )}
+                      {selectedItem.type.toUpperCase()}
+                    </Badge>
+                    {selectedItem.category && (
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                        {selectedItem.category}
+                      </Badge>
+                    )}
+                    {selectedItem.wordCount && selectedItem.wordCount > 0 && (
+                      <Badge variant="secondary">
+                        {selectedItem.wordCount.toLocaleString()} words
+                      </Badge>
+                    )}
                   </div>
-                </CardHeader>
-                {item.category && (
-                  <CardContent>
-                    <Badge variant="secondary">{item.category}</Badge>
-                  </CardContent>
-                )}
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {filteredContent.map((item) => (
-              <Card
-                key={item.id}
-                className="cursor-pointer hover:shadow-md transition-shadow"
-                onClick={() => { setSelectedItem(item); setShowFullContent(true) }}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg border ${getTypeColor(item.type)}`}>
-                      {getTypeIcon(item.type)}
+
+                  {selectedItem.tags && selectedItem.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {selectedItem.tags.map((tag, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          <Tag className="h-2.5 w-2.5 mr-1" />
+                          {tag}
+                        </Badge>
+                      ))}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 line-clamp-1">{item.title}</h3>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
-                        {item.category && (
-                          <span className="flex items-center gap-1">
-                            <Tag className="h-3 w-3" />
-                            {item.category}
-                          </span>
-                        )}
-                        {item.wordCount && item.wordCount > 0 && (
-                          <span>{item.wordCount.toLocaleString()} words</span>
-                        )}
+                  )}
+
+                  <div className="mb-6 flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(selectedItem.url, '_blank')}
+                    >
+                      <ExternalLink className="h-3 w-3 mr-2" />
+                      View Original
+                    </Button>
+                    {selectedItem.type === 'pdf' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(selectedItem.url, '_blank')}
+                      >
+                        <Download className="h-3 w-3 mr-2" />
+                        Download PDF
+                      </Button>
+                    )}
+                  </div>
+
+                  {selectedItem.content && (
+                    <div className="prose prose-lg max-w-none">
+                      <MarkdownRenderer
+                        content={selectedItem.content}
+                        onHeadingsExtracted={setHeadings}
+                      />
+                    </div>
+                  )}
+
+                  {/* Related Content */}
+                  {relatedContent.length > 0 && (
+                    <div className="mt-12 pt-6 border-t">
+                      <h3 className="text-xl font-bold mb-4">Related Content</h3>
+                      <div className="grid md:grid-cols-2 gap-3">
+                        {relatedContent.map((item) => (
+                          <Card
+                            key={item.id}
+                            className="cursor-pointer hover:shadow-md transition-shadow"
+                            onClick={() => setSelectedItem(item)}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                {item.type === 'pdf' ? (
+                                  <FileText className="h-4 w-4 text-red-500 mt-1" />
+                                ) : (
+                                  <Globe className="h-4 w-4 text-blue-500 mt-1" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-sm line-clamp-2">{item.title}</h4>
+                                  {item.category && (
+                                    <p className="text-xs text-gray-500 mt-1">{item.category}</p>
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => { e.stopPropagation(); window.open(item.url, '_blank') }}
-                      >
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        Open
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-20 text-gray-500">
+                  <BookOpen className="h-16 w-16 mx-auto mb-4 text-gray-300" />
+                  <p>Select a page from the navigation to get started</p>
+                </div>
+              )}
+            </article>
+
+            {/* Table of Contents */}
+            {headings.length > 0 && (
+              <aside className="hidden xl:block w-64 flex-shrink-0">
+                <TableOfContents headings={headings} />
+              </aside>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </main>
 
       {/* AI Chat Panel */}
       {showChat && (
@@ -621,7 +531,7 @@ export default function SmartSiteToolsPage() {
           <div className="p-4 border-b bg-gradient-to-r from-[#00A5E0] to-[#0090C8] text-white rounded-t-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <MessageSquare className="h-5 w-5" />
+                <Brain className="h-5 w-5" />
                 <h3 className="font-semibold">Ask AI</h3>
               </div>
               <button onClick={() => setShowChat(false)} className="hover:bg-white/20 rounded p-1">
