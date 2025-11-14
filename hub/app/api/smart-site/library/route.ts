@@ -212,6 +212,5 @@ function textMatches(resourceText: string, insightText: string): boolean {
   return overlap.length >= 2 // At least 2 matching keywords
 }
 
-export const config = {
-  maxDuration: 60
-}
+// Next.js 16 route segment config
+export const maxDuration = 60

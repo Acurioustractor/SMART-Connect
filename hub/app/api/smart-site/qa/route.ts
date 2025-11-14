@@ -139,6 +139,5 @@ If relevant, mention specific tools, worksheets, or resources that might help.`
   }
 }
 
-export const config = {
-  maxDuration: 60
-}
+// Next.js 16 route segment config
+export const maxDuration = 60

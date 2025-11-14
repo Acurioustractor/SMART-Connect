@@ -146,6 +146,5 @@ export async function POST(req: Request) {
   }
 }
 
-export const config = {
-  maxDuration: 30
-}
+// Next.js 16 route segment config
+export const maxDuration = 30
