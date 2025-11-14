@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'fs'
 import path from 'path'
+import { execSync } from 'child_process'
 
 const getSupabase = () => {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -20,6 +21,30 @@ const getSupabase = () => {
 }
 
 /**
+ * Workaround for DNS resolution issues - use curl instead of fetch
+ */
+const querySupabaseCurl = (table: string, select = '*', orderBy?: string, limit?: number): any[] => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!
+
+  let apiUrl = `${url}/rest/v1/${table}?select=${select}`
+  if (orderBy) apiUrl += `&order=${orderBy}`
+  if (limit) apiUrl += `&limit=${limit}`
+
+  const cmd = `curl -s "${apiUrl}" \\
+    -H "apikey: ${key}" \\
+    -H "Authorization: Bearer ${key}"`
+
+  try {
+    const output = execSync(cmd, { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024 })
+    return JSON.parse(output)
+  } catch (error: any) {
+    console.error(`Curl error for ${table}:`, error.message)
+    return []
+  }
+}
+
+/**
  * GET /api/smart-site/library
  * Returns all scraped content and PDFs with optional interview insights
  */
@@ -28,28 +53,9 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const includeInsights = searchParams.get('includeInsights') === 'true'
 
-    const supabase = getSupabase()
-
-    // Get scraped content
-    const { data: scrapedContent, error: scrapedError } = await supabase
-      .from('scraped_content')
-      .select('*')
-      .order('last_updated', { ascending: false })
-      .limit(100)
-
-    if (scrapedError) {
-      throw scrapedError
-    }
-
-    // Get PDFs
-    const { data: pdfs, error: pdfError } = await supabase
-      .from('pdf_documents')
-      .select('*')
-      .order('updated_at', { ascending: false })
-
-    if (pdfError) {
-      console.error('PDF fetch error:', pdfError)
-    }
+    // Use curl workaround due to DNS issues in this environment
+    const scrapedContent = querySupabaseCurl('scraped_content', '*', 'last_updated.desc', 100)
+    const pdfs = querySupabaseCurl('pdf_documents', '*', 'updated_at.desc')
 
     // Format resources
     const resources = [

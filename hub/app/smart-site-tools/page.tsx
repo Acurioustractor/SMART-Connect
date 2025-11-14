@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Download, FileText, Loader2, Globe, Brain, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Container } from '@/components/ui/container'
@@ -43,7 +43,7 @@ interface PDFResource {
 }
 
 export default function SmartSiteToolsPage() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [scrapeStatus, setScrapeStatus] = useState<'idle' | 'scraping' | 'completed' | 'error'>('idle')
   const [scrapedContent, setScrapedContent] = useState<ScrapedContent[]>([])
   const [pdfResources, setPdfResources] = useState<PDFResource[]>([])
@@ -51,6 +51,11 @@ export default function SmartSiteToolsPage() {
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showInsights, setShowInsights] = useState(false)
+
+  // Automatically load database content on mount
+  useEffect(() => {
+    loadFromDatabase()
+  }, [])
 
   const loadFromDatabase = async () => {
     setLoading(true)
@@ -157,47 +162,7 @@ export default function SmartSiteToolsPage() {
         </div>
 
         {/* Action Cards */}
-        <div className="grid md:grid-cols-4 gap-6 mb-8">
-          <Card className="bg-gradient-to-br from-[#003B5C] to-[#00527A] text-white">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Load Database
-              </CardTitle>
-              <CardDescription className="text-gray-300">
-                Load all scraped content from database
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button
-                onClick={loadFromDatabase}
-                disabled={loading}
-                className="w-full bg-white text-[#003B5C] hover:bg-gray-100 mb-2"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4 mr-2" />
-                    Load Content
-                  </>
-                )}
-              </Button>
-              <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showInsights}
-                  onChange={(e) => setShowInsights(e.target.checked)}
-                  className="rounded"
-                />
-                Include interview insights
-              </label>
-            </CardContent>
-          </Card>
-
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
           <Card className="bg-gradient-to-br from-[#00A5E0] to-[#0090C8] text-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -271,6 +236,21 @@ export default function SmartSiteToolsPage() {
         </div>
 
         {/* Status Banner */}
+        {loading && scrapeStatus === 'idle' && (
+          <Card className="mb-8 border-blue-200 bg-blue-50">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                <div>
+                  <p className="font-semibold">Loading content from database...</p>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Fetching all scraped pages and PDFs from Supabase
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
         {scrapeStatus !== 'idle' && (
           <Card className={`mb-8 ${
             scrapeStatus === 'completed' ? 'border-green-200 bg-green-50' :
@@ -293,6 +273,19 @@ export default function SmartSiteToolsPage() {
                       This may take a few minutes. We're extracting all content and PDFs for analysis.
                     </p>
                   )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {error && scrapeStatus === 'idle' && (
+          <Card className="mb-8 border-red-200 bg-red-50">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <div>
+                  <p className="font-semibold">Error loading from database</p>
+                  <p className="text-sm text-gray-600 mt-1">{error}</p>
                 </div>
               </div>
             </CardContent>
@@ -519,15 +512,15 @@ export default function SmartSiteToolsPage() {
         )}
 
         {/* Empty State */}
-        {scrapedContent.length === 0 && scrapeStatus === 'idle' && (
+        {scrapedContent.length === 0 && scrapeStatus === 'idle' && !loading && !error && (
           <Card className="py-12">
             <CardContent className="text-center">
               <Globe className="h-16 w-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No content scraped yet
+                No content in database
               </h3>
               <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                Click "Start Scraping" above to begin extracting all content and PDFs from the SMART Recovery Australia website for analysis.
+                The database is empty. Click "Start Scraping" above to begin extracting all content and PDFs from the SMART Recovery Australia website.
               </p>
             </CardContent>
           </Card>
