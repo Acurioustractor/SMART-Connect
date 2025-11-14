@@ -14,7 +14,7 @@ interface ScrapedContent {
   type: 'page' | 'pdf' | 'document'
   content: string
   scrapedAt: string
-  wordCount: number
+  wordCount: number | null
   category?: string
   analysis?: {
     summary: string
@@ -393,7 +393,7 @@ export default function SmartSiteToolsPage() {
                           </a>
                         </CardDescription>
                         <div className="flex gap-3 mt-2 text-sm text-gray-600">
-                          <span>{item.wordCount.toLocaleString()} words</span>
+                          <span>{item.wordCount ? item.wordCount.toLocaleString() : '0'} words</span>
                           <span>•</span>
                           <span>{new Date(item.scrapedAt).toLocaleDateString()}</span>
                         </div>
