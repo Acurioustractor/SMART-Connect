@@ -50,6 +50,10 @@ export default function SmartSiteWiki() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
 
+  // Filters
+  const [filterType, setFilterType] = useState<string>('all')
+  const [filterCategory, setFilterCategory] = useState<string>('all')
+
   // AI Chat
   const [showChat, setShowChat] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
@@ -77,8 +81,7 @@ export default function SmartSiteWiki() {
 
       if (data.success && data.resources) {
         setContent(data.resources)
-        const tree = buildNavigationTree(data.resources)
-        setNavigationTree(tree)
+        updateNavigationTree(data.resources)
 
         // Auto-select first item
         if (data.resources.length > 0) {
@@ -90,6 +93,30 @@ export default function SmartSiteWiki() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Rebuild navigation tree when filters change
+  useEffect(() => {
+    if (content.length > 0) {
+      updateNavigationTree(content)
+    }
+  }, [filterType, filterCategory])
+
+  const updateNavigationTree = (items: ContentItem[]) => {
+    let filtered = items
+
+    // Apply type filter
+    if (filterType !== 'all') {
+      filtered = filtered.filter(item => item.type === filterType)
+    }
+
+    // Apply category filter
+    if (filterCategory !== 'all') {
+      filtered = filtered.filter(item => item.category === filterCategory)
+    }
+
+    const tree = buildNavigationTree(filtered)
+    setNavigationTree(tree)
   }
 
   const loadRelatedContent = async (contentId: string) => {
@@ -104,10 +131,91 @@ export default function SmartSiteWiki() {
     }
   }
 
+  /**
+   * Clean and normalize page titles for better display
+   */
+  const cleanTitle = (title: string, url: string): string => {
+    if (!title || title.trim() === '') {
+      // Extract from URL if no title
+      const urlObj = new URL(url)
+      const lastPart = urlObj.pathname.split('/').filter(Boolean).pop() || 'Home'
+      return formatSectionName(lastPart)
+    }
+
+    // Remove common suffixes/prefixes
+    let cleaned = title
+      .replace(/\s*[-|–]\s*SMART Recovery.*$/i, '')
+      .replace(/^SMART Recovery\s*[-|–:]\s*/i, '')
+      .replace(/\s*\|\s*Home\s*$/i, '')
+      .replace(/\s*\|\s*SMART.*$/i, '')
+      .replace(/\s*-\s*Home\s*$/i, '')
+      .trim()
+
+    // If title is now empty, extract from URL
+    if (!cleaned) {
+      const urlObj = new URL(url)
+      const lastPart = urlObj.pathname.split('/').filter(Boolean).pop() || 'Home'
+      return formatSectionName(lastPart)
+    }
+
+    return cleaned
+  }
+
+  /**
+   * Filter out irrelevant/junk pages
+   */
+  const isRelevantPage = (item: ContentItem): boolean => {
+    const url = item.url.toLowerCase()
+    const title = (item.title || '').toLowerCase()
+
+    // Exclude patterns
+    const excludePatterns = [
+      '/search',
+      '/404',
+      '/privacy',
+      '/terms',
+      '/sitemap',
+      '/feed',
+      '/rss',
+      '/login',
+      '/register',
+      '/cart',
+      '/checkout',
+      '/account',
+      '/wp-admin',
+      '/wp-content',
+      '/wp-includes',
+      '?',  // Query parameters
+      '#',  // Anchors
+    ]
+
+    // Check if URL matches exclude patterns
+    if (excludePatterns.some(pattern => url.includes(pattern))) {
+      return false
+    }
+
+    // Exclude if title looks like navigation/junk
+    const junkTitles = ['navigation', 'menu', 'header', 'footer', 'sidebar']
+    if (junkTitles.some(junk => title.includes(junk))) {
+      return false
+    }
+
+    // Exclude if very short content (likely a nav page)
+    if (item.wordCount && item.wordCount < 50) {
+      return false
+    }
+
+    // Keep everything else
+    return true
+  }
+
   const buildNavigationTree = (items: ContentItem[]): NavigationNode[] => {
     const tree: Record<string, NavigationNode[]> = {}
 
-    items.forEach(item => {
+    // Filter and process items
+    const relevantItems = items.filter(isRelevantPage)
+
+    relevantItems.forEach(item => {
       try {
         const url = new URL(item.url)
         const pathParts = url.pathname.split('/').filter(Boolean)
@@ -117,14 +225,19 @@ export default function SmartSiteWiki() {
           tree[section] = []
         }
 
+        const cleanedTitle = cleanTitle(item.title, item.url)
+
         tree[section].push({
           id: item.id,
-          title: item.title,
+          title: cleanedTitle,
           url: item.url,
           path: url.pathname,
           children: [],
           isExpanded: false,
-          item
+          item: {
+            ...item,
+            title: cleanedTitle  // Update item title too
+          }
         })
       } catch (e) {
         // Skip invalid URLs
@@ -290,7 +403,7 @@ export default function SmartSiteWiki() {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="relative">
+            <div className="relative mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input
                 type="text"
@@ -300,11 +413,57 @@ export default function SmartSiteWiki() {
                 className="pl-10 text-sm"
               />
             </div>
+
+            {/* Filters */}
+            <div className="flex gap-2">
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Types</option>
+                <option value="page">Pages</option>
+                <option value="pdf">PDFs</option>
+                <option value="document">Documents</option>
+              </select>
+              <select
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="all">All Categories</option>
+                <option value="facilitator">Facilitators</option>
+                <option value="participant">Participants</option>
+                <option value="tool">Tools</option>
+                <option value="resource">Resources</option>
+                <option value="training">Training</option>
+              </select>
+            </div>
+            {(filterType !== 'all' || filterCategory !== 'all') && (
+              <button
+                onClick={() => {
+                  setFilterType('all')
+                  setFilterCategory('all')
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 mt-2"
+              >
+                Clear filters
+              </button>
+            )}
           </div>
 
           {/* Navigation Tree */}
           <div className="flex-1 overflow-y-auto p-2">
-            {filteredTree.map(node => renderNavigationNode(node))}
+            <div className="px-3 py-2 text-xs text-gray-500">
+              {navigationTree.reduce((sum, section) => sum + section.children.length, 0)} items
+            </div>
+            {filteredTree.length === 0 ? (
+              <div className="px-3 py-8 text-center text-sm text-gray-400">
+                No content matches your filters
+              </div>
+            ) : (
+              filteredTree.map(node => renderNavigationNode(node))
+            )}
           </div>
         </div>
       </aside>
@@ -328,7 +487,7 @@ export default function SmartSiteWiki() {
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
-                <div className="relative">
+                <div className="relative mb-3">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
                     type="text"
@@ -338,9 +497,55 @@ export default function SmartSiteWiki() {
                     className="pl-10 text-sm"
                   />
                 </div>
+
+                {/* Filters */}
+                <div className="flex gap-2">
+                  <select
+                    value={filterType}
+                    onChange={(e) => setFilterType(e.target.value)}
+                    className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="page">Pages</option>
+                    <option value="pdf">PDFs</option>
+                    <option value="document">Documents</option>
+                  </select>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    className="flex-1 text-xs border rounded-md px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All Categories</option>
+                    <option value="facilitator">Facilitators</option>
+                    <option value="participant">Participants</option>
+                    <option value="tool">Tools</option>
+                    <option value="resource">Resources</option>
+                    <option value="training">Training</option>
+                  </select>
+                </div>
+                {(filterType !== 'all' || filterCategory !== 'all') && (
+                  <button
+                    onClick={() => {
+                      setFilterType('all')
+                      setFilterCategory('all')
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800 mt-2"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto p-2">
-                {filteredTree.map(node => renderNavigationNode(node))}
+                <div className="px-3 py-2 text-xs text-gray-500">
+                  {navigationTree.reduce((sum, section) => sum + section.children.length, 0)} items
+                </div>
+                {filteredTree.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-sm text-gray-400">
+                    No content matches your filters
+                  </div>
+                ) : (
+                  filteredTree.map(node => renderNavigationNode(node))
+                )}
               </div>
             </div>
           </aside>
