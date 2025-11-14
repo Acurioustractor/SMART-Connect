@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react'
 import {
   Search, Download, FileText, Loader2, Globe, Brain, MessageSquare, Send,
-  ChevronRight, ChevronDown, ExternalLink, RefreshCw, Folder, File,
-  AlertCircle, X, Filter, BookOpen, Layout
+  ExternalLink, RefreshCw, Filter, BookOpen, List, Grid, ChevronDown,
+  X, Tag, Calendar, FileType
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Container } from '@/components/ui/container'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Select } from '@/components/ui/select'
 
 interface ContentItem {
   id: string
@@ -32,16 +32,6 @@ interface ContentItem {
   }
 }
 
-interface PageNode {
-  path: string
-  name: string
-  url: string
-  content?: ContentItem
-  pdfs: ContentItem[]
-  children: Map<string, PageNode>
-  isExpanded?: boolean
-}
-
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
@@ -51,10 +41,13 @@ interface ChatMessage {
 export default function SmartSiteToolsPage() {
   const [loading, setLoading] = useState(true)
   const [content, setContent] = useState<ContentItem[]>([])
-  const [siteTree, setSiteTree] = useState<PageNode | null>(null)
-  const [selectedPage, setSelectedPage] = useState<PageNode | null>(null)
+  const [filteredContent, setFilteredContent] = useState<ContentItem[]>([])
+  const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedType, setSelectedType] = useState<string>('all')
   const [error, setError] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
 
   // AI Chat
   const [showChat, setShowChat] = useState(false)
@@ -62,11 +55,15 @@ export default function SmartSiteToolsPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
 
+  // Categories and types
+  const categories = ['all', ...Array.from(new Set(content.map(c => c.category).filter(Boolean)))].sort()
+  const types = ['all', 'page', 'pdf', 'article']
+
   // Stats
   const stats = {
     totalPages: content.filter(c => c.type !== 'pdf').length,
     totalPDFs: content.filter(c => c.type === 'pdf').length,
-    categories: new Set(content.map(c => c.category).filter(Boolean)).size
+    totalWords: content.reduce((sum, c) => sum + (c.wordCount || 0), 0)
   }
 
   useEffect(() => {
@@ -74,16 +71,8 @@ export default function SmartSiteToolsPage() {
   }, [])
 
   useEffect(() => {
-    if (content.length > 0) {
-      const tree = buildSiteTree(content)
-      setSiteTree(tree)
-      // Auto-select first page with actual content
-      const firstPage = findFirstPageWithContent(tree)
-      if (firstPage) {
-        setSelectedPage(firstPage)
-      }
-    }
-  }, [content])
+    applyFilters()
+  }, [content, searchQuery, selectedCategory, selectedType])
 
   const loadFromDatabase = async () => {
     setLoading(true)
@@ -97,9 +86,17 @@ export default function SmartSiteToolsPage() {
         throw new Error(data.error || 'Failed to load from database')
       }
 
-      // Clean up and deduplicate content
-      const cleanedContent = cleanupContent(data.resources || [])
-      setContent(cleanedContent)
+      // Clean and enhance content
+      const cleaned = cleanupContent(data.resources || [])
+      setContent(cleaned)
+
+      // Auto-select first item with content
+      if (cleaned.length > 0) {
+        const firstWithContent = cleaned.find(c => c.content || c.wordCount)
+        if (firstWithContent) {
+          setSelectedItem(firstWithContent)
+        }
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load from database')
     } finally {
@@ -112,7 +109,7 @@ export default function SmartSiteToolsPage() {
     const cleaned: ContentItem[] = []
 
     for (const item of items) {
-      // Skip items with terrible names or no content
+      // Skip invalid URLs
       if (!item.url || item.url.includes('undefined') || item.url.includes('null')) {
         continue
       }
@@ -123,10 +120,22 @@ export default function SmartSiteToolsPage() {
       }
       seen.add(item.url)
 
-      // Fix titles
+      // Fix title
       let betterTitle = item.title
-      if (!betterTitle || betterTitle === 'Hubfs' || betterTitle.match(/^\d+$/)) {
+
+      // If title is bad, extract from URL
+      if (!betterTitle || betterTitle === 'Hubfs' || betterTitle.match(/^\d+$/) || betterTitle.length < 3) {
         betterTitle = extractTitleFromUrl(item.url)
+      }
+
+      // Clean up title
+      betterTitle = betterTitle
+        .replace(/\|.*$/, '') // Remove site suffix
+        .replace(/SMART Recovery Australia/gi, '')
+        .trim()
+
+      if (!betterTitle) {
+        betterTitle = 'Untitled'
       }
 
       cleaned.push({
@@ -135,7 +144,8 @@ export default function SmartSiteToolsPage() {
       })
     }
 
-    return cleaned
+    // Sort by title
+    return cleaned.sort((a, b) => a.title.localeCompare(b.title))
   }
 
   const extractTitleFromUrl = (url: string): string => {
@@ -143,20 +153,25 @@ export default function SmartSiteToolsPage() {
       const urlObj = new URL(url)
       const pathname = urlObj.pathname
 
-      // Get last segment
+      // Get path segments
       const segments = pathname.split('/').filter(Boolean)
       if (segments.length === 0) return 'Home'
 
+      // Get last meaningful segment
       const lastSegment = segments[segments.length - 1]
 
       // Remove file extensions
       const withoutExt = lastSegment.replace(/\.(html|php|pdf|aspx?)$/i, '')
 
-      // Decode and format
+      // Decode URL encoding
       const decoded = decodeURIComponent(withoutExt)
+
+      // Format: replace dashes/underscores with spaces, title case
       const formatted = decoded
         .replace(/[-_]/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase())
+        .replace(/\s+/g, ' ')
+        .trim()
 
       return formatted || 'Page'
     } catch {
@@ -164,134 +179,30 @@ export default function SmartSiteToolsPage() {
     }
   }
 
-  const buildSiteTree = (items: ContentItem[]): PageNode => {
-    const root: PageNode = {
-      path: '',
-      name: 'SMART Recovery Australia',
-      url: 'https://smartrecoveryaustralia.com.au',
-      pdfs: [],
-      children: new Map(),
-      isExpanded: true
+  const applyFilters = () => {
+    let filtered = [...content]
+
+    // Category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(item => item.category === selectedCategory)
     }
 
-    for (const item of items) {
-      try {
-        const urlObj = new URL(item.url)
-        const pathname = urlObj.pathname
-        const segments = pathname.split('/').filter(Boolean)
-
-        let currentNode = root
-
-        // Build path through tree
-        for (let i = 0; i < segments.length; i++) {
-          const segment = segments[i]
-          const isLast = i === segments.length - 1
-
-          if (!currentNode.children.has(segment)) {
-            const newNode: PageNode = {
-              path: '/' + segments.slice(0, i + 1).join('/'),
-              name: extractTitleFromUrl('/' + segment),
-              url: urlObj.origin + '/' + segments.slice(0, i + 1).join('/'),
-              pdfs: [],
-              children: new Map(),
-              isExpanded: false
-            }
-            currentNode.children.set(segment, newNode)
-          }
-
-          currentNode = currentNode.children.get(segment)!
-
-          // If this is the last segment, add content
-          if (isLast) {
-            if (item.type === 'pdf') {
-              currentNode.pdfs.push(item)
-            } else {
-              currentNode.content = item
-            }
-          }
-        }
-      } catch (err) {
-        console.error('Error processing item:', item.url, err)
-      }
+    // Type filter
+    if (selectedType !== 'all') {
+      filtered = filtered.filter(item => item.type === selectedType)
     }
 
-    return root
-  }
-
-  const findFirstPageWithContent = (node: PageNode): PageNode | null => {
-    if (node.content || node.pdfs.length > 0) {
-      return node
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(item =>
+        item.title.toLowerCase().includes(query) ||
+        item.content?.toLowerCase().includes(query) ||
+        item.category?.toLowerCase().includes(query)
+      )
     }
 
-    for (const child of node.children.values()) {
-      const found = findFirstPageWithContent(child)
-      if (found) return found
-    }
-
-    return null
-  }
-
-  const toggleNode = (node: PageNode) => {
-    node.isExpanded = !node.isExpanded
-    setSiteTree({ ...siteTree! })
-  }
-
-  const renderTreeNode = (node: PageNode, depth: number = 0): JSX.Element => {
-    const hasChildren = node.children.size > 0
-    const hasContent = !!node.content || node.pdfs.length > 0
-    const isSelected = selectedPage?.path === node.path
-
-    return (
-      <div key={node.path}>
-        <div
-          className={`flex items-center gap-2 py-2 px-3 rounded cursor-pointer transition-colors ${
-            isSelected ? 'bg-blue-100 text-blue-900' : 'hover:bg-gray-100'
-          }`}
-          style={{ paddingLeft: `${depth * 16 + 12}px` }}
-          onClick={() => {
-            if (hasChildren) {
-              toggleNode(node)
-            }
-            if (hasContent) {
-              setSelectedPage(node)
-            }
-          }}
-        >
-          {hasChildren && (
-            <span onClick={(e) => { e.stopPropagation(); toggleNode(node); }}>
-              {node.isExpanded ? (
-                <ChevronDown className="h-4 w-4 text-gray-500" />
-              ) : (
-                <ChevronRight className="h-4 w-4 text-gray-500" />
-              )}
-            </span>
-          )}
-          {!hasChildren && <div className="w-4" />}
-
-          {hasChildren ? (
-            <Folder className={`h-4 w-4 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
-          ) : (
-            <File className={`h-4 w-4 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
-          )}
-
-          <span className={`text-sm truncate flex-1 ${isSelected ? 'font-semibold' : ''}`}>
-            {node.name}
-          </span>
-
-          {node.pdfs.length > 0 && (
-            <Badge variant="secondary" className="text-xs">
-              {node.pdfs.length} PDF{node.pdfs.length > 1 ? 's' : ''}
-            </Badge>
-          )}
-        </div>
-
-        {hasChildren && node.isExpanded && (
-          <div>
-            {Array.from(node.children.values()).map(child => renderTreeNode(child, depth + 1))}
-          </div>
-        )}
-      </div>
-    )
+    setFilteredContent(filtered)
   }
 
   const sendChatMessage = async () => {
@@ -312,67 +223,51 @@ export default function SmartSiteToolsPage() {
       const data = await response.json()
 
       if (data.success) {
-        const assistantMessage: ChatMessage = {
+        setChatMessages(prev => [...prev, {
           role: 'assistant',
           content: data.answer,
           sources: data.sources
-        }
-        setChatMessages(prev => [...prev, assistantMessage])
+        }])
       }
     } catch (err: any) {
-      const errorMessage: ChatMessage = {
+      setChatMessages(prev => [...prev, {
         role: 'assistant',
         content: 'Sorry, I encountered an error: ' + err.message
-      }
-      setChatMessages(prev => [...prev, errorMessage])
+      }])
     } finally {
       setChatLoading(false)
     }
   }
 
-  const filteredTree = (node: PageNode): PageNode | null => {
-    if (!searchQuery) return node
-
-    const query = searchQuery.toLowerCase()
-    const matches = node.name.toLowerCase().includes(query) ||
-                   node.content?.title.toLowerCase().includes(query) ||
-                   node.pdfs.some(pdf => pdf.title.toLowerCase().includes(query))
-
-    if (matches) {
-      return { ...node, isExpanded: true }
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'pdf': return <FileText className="h-4 w-4 text-red-500" />
+      case 'article': return <FileType className="h-4 w-4 text-purple-500" />
+      default: return <Globe className="h-4 w-4 text-blue-500" />
     }
+  }
 
-    // Check children
-    const filteredChildren = new Map<string, PageNode>()
-    for (const [key, child] of node.children.entries()) {
-      const filteredChild = filteredTree(child)
-      if (filteredChild) {
-        filteredChildren.set(key, filteredChild)
-      }
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case 'pdf': return 'bg-red-50 border-red-200 text-red-700'
+      case 'article': return 'bg-purple-50 border-purple-200 text-purple-700'
+      default: return 'bg-blue-50 border-blue-200 text-blue-700'
     }
-
-    if (filteredChildren.size > 0) {
-      return {
-        ...node,
-        children: filteredChildren,
-        isExpanded: true
-      }
-    }
-
-    return null
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b">
-        <div className="px-6 py-4">
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <BookOpen className="h-8 w-8 text-[#003B5C]" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">SMART Content Library</h1>
-                <p className="text-sm text-gray-600">Browse the complete SMART Recovery Australia website</p>
+                <p className="text-sm text-gray-600">
+                  {filteredContent.length} of {content.length} resources
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -385,34 +280,24 @@ export default function SmartSiteToolsPage() {
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Ask AI
               </Button>
-              <Button
-                onClick={loadFromDatabase}
-                disabled={loading}
-                variant="outline"
-                size="sm"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                )}
+              <Button onClick={loadFromDatabase} disabled={loading} variant="outline" size="sm">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
                 Refresh
               </Button>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-600">Pages</p>
+                  <p className="text-xs text-gray-600">Web Pages</p>
                   <p className="text-xl font-bold text-[#003B5C]">{stats.totalPages}</p>
                 </div>
                 <Globe className="h-6 w-6 text-blue-500 opacity-50" />
               </div>
             </div>
-
             <div className="bg-gradient-to-br from-red-50 to-white border border-red-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -422,211 +307,232 @@ export default function SmartSiteToolsPage() {
                 <FileText className="h-6 w-6 text-red-500 opacity-50" />
               </div>
             </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-white border border-purple-200 rounded-lg p-3">
+            <div className="bg-gradient-to-br from-green-50 to-white border border-green-200 rounded-lg p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-600">Categories</p>
-                  <p className="text-xl font-bold text-[#003B5C]">{stats.categories}</p>
+                  <p className="text-xs text-gray-600">Total Words</p>
+                  <p className="text-xl font-bold text-[#003B5C]">{Math.round(stats.totalWords / 1000)}K</p>
                 </div>
-                <Layout className="h-6 w-6 text-purple-500 opacity-50" />
+                <BookOpen className="h-6 w-6 text-green-500 opacity-50" />
               </div>
             </div>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-3 items-center">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search content..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              options={types.map(t => ({ value: t, label: t === 'all' ? 'All Types' : t.toUpperCase() }))}
+              className="w-36"
+            />
+            <Select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              options={categories.map(c => ({ value: c, label: c === 'all' ? 'All Categories' : c }))}
+              className="w-48"
+            />
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <div className="w-80 bg-white border-r flex flex-col">
-          <div className="p-4 border-b">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                type="text"
-                placeholder="Search pages..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 text-sm"
-              />
-            </div>
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
           </div>
-
-          <div className="flex-1 overflow-y-auto">
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
-              </div>
-            ) : error ? (
-              <div className="p-4">
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-                  {error}
-                </div>
-              </div>
-            ) : siteTree ? (
-              renderTreeNode(searchQuery ? filteredTree(siteTree) || siteTree : siteTree)
-            ) : (
-              <div className="p-4 text-sm text-gray-500 text-center">
-                No content available
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Main Panel */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
-          {selectedPage ? (
-            <div className="max-w-4xl mx-auto p-6">
-              {/* Breadcrumb */}
-              <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
-                <Globe className="h-4 w-4" />
-                {selectedPage.path.split('/').filter(Boolean).map((segment, idx, arr) => (
-                  <span key={idx} className="flex items-center gap-2">
-                    <ChevronRight className="h-3 w-3" />
-                    <span className={idx === arr.length - 1 ? 'text-gray-900 font-medium' : ''}>
-                      {extractTitleFromUrl('/' + segment)}
-                    </span>
-                  </span>
-                ))}
-              </div>
-
-              {/* Page Title */}
-              <div className="mb-6">
-                <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedPage.name}</h2>
-                <a
-                  href={selectedPage.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  {selectedPage.url}
-                </a>
-              </div>
-
-              {/* Page Content */}
-              {selectedPage.content && (
-                <Card className="mb-6">
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Globe className="h-5 w-5 text-blue-500" />
-                      Page Content
-                    </CardTitle>
-                    <CardDescription>
-                      {selectedPage.content.wordCount ? `${selectedPage.content.wordCount.toLocaleString()} words` : 'Content preview'}
-                    </CardDescription>
-                  </CardHeader>
+        ) : error ? (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="py-8 text-center">
+              <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-3" />
+              <p className="text-red-700">{error}</p>
+            </CardContent>
+          </Card>
+        ) : filteredContent.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Search className="h-12 w-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600">No content found</p>
+              <Button variant="outline" onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedType('all') }} className="mt-4">
+                Clear Filters
+              </Button>
+            </CardContent>
+          </Card>
+        ) : viewMode === 'grid' ? (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredContent.map((item) => (
+              <Card
+                key={item.id}
+                className="cursor-pointer hover:shadow-lg transition-shadow"
+                onClick={() => setSelectedItem(item)}
+              >
+                <CardHeader>
+                  <div className="flex items-start gap-3">
+                    {getTypeIcon(item.type)}
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-base line-clamp-2">{item.title}</CardTitle>
+                      <CardDescription className="mt-1">
+                        {item.wordCount ? `${item.wordCount.toLocaleString()} words` : item.type}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                {item.category && (
                   <CardContent>
-                    {selectedPage.content.content ? (
-                      <div className="prose prose-sm max-w-none">
-                        <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                          <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                            {selectedPage.content.content.substring(0, 2000)}
-                            {selectedPage.content.content.length > 2000 && '...'}
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 italic">No content available</p>
-                    )}
-
-                    {selectedPage.content.category && (
-                      <div className="mt-4">
-                        <Badge variant="default">{selectedPage.content.category}</Badge>
-                      </div>
-                    )}
-
-                    {selectedPage.content.analysis && (
-                      <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                        <h4 className="font-semibold text-sm text-gray-900 mb-2 flex items-center gap-2">
-                          <Brain className="h-4 w-4 text-green-600" />
-                          AI Analysis
-                        </h4>
-                        <p className="text-sm text-gray-700">{selectedPage.content.analysis.summary}</p>
-                      </div>
-                    )}
+                    <Badge variant="secondary">{item.category}</Badge>
                   </CardContent>
-                </Card>
+                )}
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredContent.map((item) => (
+              <Card
+                key={item.id}
+                className={`cursor-pointer hover:shadow-md transition-shadow ${
+                  selectedItem?.id === item.id ? 'ring-2 ring-blue-500' : ''
+                }`}
+                onClick={() => setSelectedItem(item)}
+              >
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-2 rounded-lg border ${getTypeColor(item.type)}`}>
+                      {getTypeIcon(item.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900 line-clamp-1">{item.title}</h3>
+                      <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                        {item.category && (
+                          <span className="flex items-center gap-1">
+                            <Tag className="h-3 w-3" />
+                            {item.category}
+                          </span>
+                        )}
+                        {item.wordCount && item.wordCount > 0 && (
+                          <span>{item.wordCount.toLocaleString()} words</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => { e.stopPropagation(); window.open(item.url, '_blank') }}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+
+        {/* Detail Panel */}
+        {selectedItem && (
+          <Card className="mt-6 border-2 border-blue-200">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <CardTitle className="text-2xl">{selectedItem.title}</CardTitle>
+                  <CardDescription className="mt-2">
+                    <a
+                      href={selectedItem.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {selectedItem.url}
+                    </a>
+                  </CardDescription>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedItem(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Badge variant="outline">{selectedItem.type}</Badge>
+                {selectedItem.category && <Badge>{selectedItem.category}</Badge>}
+                {selectedItem.wordCount && selectedItem.wordCount > 0 && (
+                  <Badge variant="secondary">{selectedItem.wordCount.toLocaleString()} words</Badge>
+                )}
+              </div>
+
+              {selectedItem.content && (
+                <div className="mt-4">
+                  <h4 className="font-semibold text-sm text-gray-900 mb-2">Content Preview</h4>
+                  <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto border">
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                      {selectedItem.content.substring(0, 3000)}
+                      {selectedItem.content.length > 3000 && '...'}
+                    </p>
+                  </div>
+                </div>
               )}
 
-              {/* Related PDFs */}
-              {selectedPage.pdfs.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <FileText className="h-5 w-5 text-red-500" />
-                      PDF Resources on this Page ({selectedPage.pdfs.length})
-                    </CardTitle>
-                    <CardDescription>
-                      Documents and resources found on this page
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {selectedPage.pdfs.map((pdf) => (
-                        <div
-                          key={pdf.id}
-                          className="flex items-start justify-between p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors border"
-                        >
-                          <div className="flex items-start gap-3 flex-1 min-w-0">
-                            <FileText className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-medium text-gray-900 line-clamp-2">{pdf.title}</h4>
-                              {pdf.category && (
-                                <Badge variant="secondary" className="mt-2">
-                                  {pdf.category}
-                                </Badge>
-                              )}
-                              {pdf.wordCount && pdf.wordCount > 0 && (
-                                <p className="text-xs text-gray-600 mt-1">
-                                  {pdf.wordCount.toLocaleString()} words
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 ml-3 flex-shrink-0">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => window.open(pdf.url, '_blank')}
-                            >
-                              <Download className="h-3 w-3 mr-1" />
-                              Download
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => window.open(pdf.url, '_blank')}
-                            >
-                              <ExternalLink className="h-3 w-3 mr-1" />
-                              View
-                            </Button>
-                          </div>
-                        </div>
+              {selectedItem.analysis && (
+                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
+                  <h4 className="font-semibold text-sm text-gray-900 mb-2 flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-green-600" />
+                    AI Analysis
+                  </h4>
+                  <p className="text-sm text-gray-700 mb-3">{selectedItem.analysis.summary}</p>
+                  {selectedItem.analysis.keyTopics.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedItem.analysis.keyTopics.map((topic, idx) => (
+                        <Badge key={idx} variant="success">{topic}</Badge>
                       ))}
                     </div>
-                  </CardContent>
-                </Card>
+                  )}
+                </div>
               )}
 
-              {!selectedPage.content && selectedPage.pdfs.length === 0 && (
-                <Card className="text-center py-12">
-                  <CardContent>
-                    <FileText className="h-12 w-12 text-gray-400 mx-auto mb-3" />
-                    <p className="text-gray-600">This page has no content or PDFs</p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <BookOpen className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-lg text-gray-600">Select a page from the sidebar to view its content</p>
+              <div className="mt-4 flex gap-2">
+                <Button onClick={() => window.open(selectedItem.url, '_blank')}>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Original
+                </Button>
+                {selectedItem.type === 'pdf' && (
+                  <Button variant="outline" onClick={() => window.open(selectedItem.url, '_blank')}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download PDF
+                  </Button>
+                )}
               </div>
-            </div>
-          )}
-        </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* AI Chat Panel */}
@@ -636,7 +542,7 @@ export default function SmartSiteToolsPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                <h3 className="font-semibold">Ask AI About Content</h3>
+                <h3 className="font-semibold">Ask AI</h3>
               </div>
               <button onClick={() => setShowChat(false)} className="hover:bg-white/20 rounded p-1">
                 <X className="h-5 w-5" />
@@ -648,7 +554,6 @@ export default function SmartSiteToolsPage() {
               <div className="text-center text-gray-500 text-sm py-8">
                 <Brain className="h-12 w-12 mx-auto mb-3 text-gray-400" />
                 <p>Ask me anything about SMART Recovery!</p>
-                <p className="mt-2 text-xs">I'll search through all pages and PDFs.</p>
               </div>
             )}
             {chatMessages.map((msg, idx) => (
