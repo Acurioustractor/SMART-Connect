@@ -15,12 +15,21 @@ interface ScrapedContent {
   content: string
   scrapedAt: string
   wordCount: number
+  category?: string
   analysis?: {
     summary: string
     keyTopics: string[]
     relevantForFacilitators: boolean
     contentType: string
   }
+  interviewInsights?: Array<{
+    facilitator: string
+    type: 'addresses_challenge' | 'theme' | 'platform_need'
+    challenge?: string
+    theme?: string
+    featureIdea?: string
+    priority?: string
+  }>
 }
 
 interface PDFResource {
@@ -41,6 +50,30 @@ export default function SmartSiteToolsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [analyzing, setAnalyzing] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showInsights, setShowInsights] = useState(false)
+
+  const loadFromDatabase = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/smart-site/library?includeInsights=${showInsights}`)
+      const data = await response.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to load from database')
+      }
+
+      setScrapedContent(data.resources.filter((r: any) => r.type !== 'pdf'))
+      setPdfResources(data.resources.filter((r: any) => r.type === 'pdf'))
+      setScrapeStatus('completed')
+    } catch (err: any) {
+      setError(err.message || 'Failed to load from database')
+      setScrapeStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const startFullSiteScrape = async () => {
     setLoading(true)
@@ -124,8 +157,48 @@ export default function SmartSiteToolsPage() {
         </div>
 
         {/* Action Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
+        <div className="grid md:grid-cols-4 gap-6 mb-8">
           <Card className="bg-gradient-to-br from-[#003B5C] to-[#00527A] text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Load Database
+              </CardTitle>
+              <CardDescription className="text-gray-300">
+                Load all scraped content from database
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                onClick={loadFromDatabase}
+                disabled={loading}
+                className="w-full bg-white text-[#003B5C] hover:bg-gray-100 mb-2"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Load Content
+                  </>
+                )}
+              </Button>
+              <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showInsights}
+                  onChange={(e) => setShowInsights(e.target.checked)}
+                  className="rounded"
+                />
+                Include interview insights
+              </label>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-[#00A5E0] to-[#0090C8] text-white">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Globe className="h-5 w-5" />
@@ -139,7 +212,7 @@ export default function SmartSiteToolsPage() {
               <Button
                 onClick={startFullSiteScrape}
                 disabled={loading}
-                className="w-full bg-white text-[#003B5C] hover:bg-gray-100"
+                className="w-full bg-white text-[#00A5E0] hover:bg-gray-100"
               >
                 {loading ? (
                   <>
@@ -331,6 +404,20 @@ export default function SmartSiteToolsPage() {
                           <span>•</span>
                           <span>{new Date(item.scrapedAt).toLocaleDateString()}</span>
                         </div>
+                        {item.category && (
+                          <div className="mt-2">
+                            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                              {item.category}
+                            </span>
+                          </div>
+                        )}
+                        {item.interviewInsights && item.interviewInsights.length > 0 && (
+                          <div className="mt-2">
+                            <span className="inline-block bg-orange-100 text-orange-800 text-xs px-2 py-1 rounded">
+                              {item.interviewInsights.length} facilitator insight{item.interviewInsights.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <Button
                         size="sm"
@@ -356,7 +443,7 @@ export default function SmartSiteToolsPage() {
                       </Button>
                     </div>
                   </CardHeader>
-                  {item.analysis && (
+                  {(item.analysis || item.interviewInsights) && (
                     <CardContent className="border-t bg-gray-50">
                       <div className="space-y-3">
                         <div>
@@ -387,6 +474,42 @@ export default function SmartSiteToolsPage() {
                           )}
                         </div>
                       </div>
+                      {item.interviewInsights && item.interviewInsights.length > 0 && (
+                        <div className="mt-4 pt-4 border-t">
+                          <h4 className="font-semibold text-sm text-gray-900 mb-2 flex items-center gap-2">
+                            <Sparkles className="h-4 w-4 text-orange-500" />
+                            Connected to Facilitator Insights ({item.interviewInsights.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {item.interviewInsights.slice(0, 3).map((insight, idx) => (
+                              <div key={idx} className="text-sm bg-white rounded p-2 border">
+                                <span className="font-medium text-gray-900">{insight.facilitator}:</span>{' '}
+                                {insight.type === 'addresses_challenge' && insight.challenge}
+                                {insight.type === 'theme' && `Theme: ${insight.theme}`}
+                                {insight.type === 'platform_need' && (
+                                  <>
+                                    {insight.featureIdea}
+                                    {insight.priority && (
+                                      <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+                                        insight.priority === 'Critical' ? 'bg-red-100 text-red-700' :
+                                        insight.priority === 'High' ? 'bg-orange-100 text-orange-700' :
+                                        'bg-blue-100 text-blue-700'
+                                      }`}>
+                                        {insight.priority}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                            {item.interviewInsights.length > 3 && (
+                              <p className="text-xs text-gray-500">
+                                +{item.interviewInsights.length - 3} more insights
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   )}
                 </Card>
